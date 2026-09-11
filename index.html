@@ -1236,8 +1236,10 @@ async function openIndividualTab(){
       if (!s){ wrap.innerHTML = ''; return; }
 
       const evalRowsHtml = (s.peerEvals || []).map(function(e){
-        return '<tr><td>' + escapeHtml(e.date || '') + '</td><td>' + escapeHtml(e.questionLabel || '') + '</td><td>' + escapeHtml(e.contributionText) + '</td><td>' + escapeHtml(String(e.score)) + '</td></tr>';
-      }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
+        return '<tr><td>' + escapeHtml(e.date || '') + '</td><td>' + escapeHtml(e.contributionText) + '</td><td>' + escapeHtml(String(e.score)) + '</td></tr>';
+      }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
+      const scoreTotal = (s.scoreTotal != null) ? s.scoreTotal : 0;
+      const scoreMax = (s.scoreMax != null) ? s.scoreMax : 0;
 
       const ciRowsHtml = (s.checkins || []).map(function(c){
         return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.goalText) + '</td></tr>';
@@ -1248,8 +1250,8 @@ async function openIndividualTab(){
       }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
 
       wrap.innerHTML = '<div class="card table-wrap"><h2>第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</h2>'
-        + '<h3>チーム代表者による貢献評価</h3>'
-        + '<table><thead><tr><th>日付</th><th>問い</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>' + evalRowsHtml + '</tbody></table>'
+        + '<h3>チーム代表者による貢献評価（授業日ごとに1回）　累積：' + scoreTotal + ' / ' + scoreMax + '点</h3>'
+        + '<table><thead><tr><th>日付</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>' + evalRowsHtml + '</tbody></table>'
         + '<h3>チェックイン</h3>'
         + '<table><thead><tr><th>日付</th><th>時刻</th><th>今日意識したいこと</th></tr></thead><tbody>' + ciRowsHtml + '</tbody></table>'
         + '<h3>チェックアウト</h3>'
