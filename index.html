@@ -1281,6 +1281,18 @@ async function openIndividualTab(){
     return String(a.studentId) < String(b.studentId) ? -1 : (String(a.studentId) > String(b.studentId) ? 1 : 0);
   });
 
+  // res.teams（チーム番号・チーム名の一覧）はteacherIndividualOverview側で返している想定だが、
+  // 万一（古いデプロイ等で）取得できない場合でも「チーム別に見る」が使えるよう、
+  // 学生データ自体からチーム番号を拾ってフォールバックの一覧を作る。
+  let teamsForSelect = (res.teams || []).slice();
+  if (!teamsForSelect.length) {
+    const seenTeamNo = {};
+    students.forEach(s => {
+      if (!seenTeamNo[s.teamNo]) { seenTeamNo[s.teamNo] = true; teamsForSelect.push({ teamNo: s.teamNo, teamName: '' }); }
+    });
+    teamsForSelect.sort((a, b) => Number(a.teamNo) - Number(b.teamNo));
+  }
+
   const bodyHtml = `
     <h1>個人ごとの成績を閲覧する</h1>
     <p class="muted">基本は全員を一覧表示します。「個人別に見る」タブで学生を1人選んで詳しく確認したり、「チーム別に見る」タブでチームを選んでそのチームに所属する学生だけをまとめて確認したりできます。</p>
@@ -1320,7 +1332,7 @@ async function openIndividualTab(){
 
   const extraScript = `
     const STUDENTS = ${embedJson(students)};
-    const TEAMS = ${embedJson(res.teams || [])};
+    const TEAMS = ${embedJson(teamsForSelect)};
 
     function scoreLabel(s){
       const total = (s.scoreTotal != null) ? s.scoreTotal : 0;
@@ -1363,7 +1375,8 @@ async function openIndividualTab(){
 
     function teamOptionsHtml(){
       return TEAMS.map(function(t){
-        return '<option value="' + t.teamNo + '">第' + t.teamNo + '班　' + escapeHtml(t.teamName) + '</option>';
+        const label = '第' + t.teamNo + '班' + (t.teamName ? '　' + escapeHtml(t.teamName) : '');
+        return '<option value="' + t.teamNo + '">' + label + '</option>';
       }).join('');
     }
 
