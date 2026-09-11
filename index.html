@@ -78,14 +78,6 @@
   .kv{display:flex; justify-content:space-between; font-size:13px; margin:4px 0;}
   .thumb{max-width:100%; border-radius:8px; border:1px solid var(--border); margin:8px 0;}
   .link-btn{background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:13px;text-decoration:underline;}
-  .present-overlay{
-    position:fixed; inset:0; background:#111; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; z-index:999;
-  }
-  .present-overlay img{max-width:92vw; max-height:78vh; border-radius:6px;}
-  .present-overlay .pbar{position:absolute; top:16px; left:0; right:0; display:flex; justify-content:space-between; padding:0 20px;}
-  .present-overlay .pbar button{background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:8px 16px; cursor:pointer;}
-  .present-overlay .pname{color:#fff; font-size:20px; margin-top:14px;}
   .grade-pill{display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; font-weight:700; font-size:12px; color:#fff;}
   .gS{background:#1a8a4a;} .gA{background:#2b5fd9;} .gB{background:#6c757d;} .gC{background:#c9820a;} .gD{background:#c0392b;} .gE{background:#adb5bd;}
   footer.hint{max-width:960px; margin:0 auto; padding:0 16px 40px; color:var(--muted); font-size:12px;}
@@ -341,9 +333,11 @@
 
     <div id="tab-present" class="card hidden">
       <h2>提示モード（学生に見せる画面）</h2>
+      <p class="muted">課題を選ぶと、新しいタブに掲示板形式で提出内容が表示されます（授業でそのまま投影できます）。</p>
       <label>課題（授業日）</label>
-      <select id="presentAssignSel" onchange="loadPresentList()"></select>
-      <div id="presentGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-top:14px;"></div>
+      <select id="presentAssignSel" onchange="updatePresentInfo()"></select>
+      <p class="muted" id="presentInfo"></p>
+      <button class="btn" id="presentOpenBtn" onclick="openPresentationTab()">新しいタブで表示する</button>
     </div>
   </section>
 
@@ -352,16 +346,6 @@
 <footer class="hint">
   ビジネス開発論 授業支援システム（Google スプレッドシート連携）
 </footer>
-
-<div id="presentOverlay" class="present-overlay" style="display:none;">
-  <div class="pbar">
-    <button onclick="presentPrev()">&larr; 前へ</button>
-    <button onclick="closePresentOverlay()">閉じる ✕</button>
-    <button onclick="presentNext()">次へ &rarr;</button>
-  </div>
-  <img id="presentImg" src="">
-  <div class="pname" id="presentName"></div>
-</div>
 
 <script>
 /* =========================================================
@@ -374,7 +358,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwiMM998AqPDqaLkLvhe-Ld
 
 let session = { role: null, teamNo: null, teamName: null, studentId: null, name: null, teacherName: null };
 let currentAssignmentCache = []; // チーム画面用
-let presentItems = []; let presentIndex = 0;
 
 function showView(id){
   document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
@@ -857,7 +840,7 @@ function teacherTab(name){
   if (name === 'overview') loadTeacherOverview();
   if (name === 'individual') loadTeacherIndividual();
   if (name === 'review') loadTeamReview();
-  if (name === 'present') loadPresentList();
+  if (name === 'present') updatePresentInfo();
 }
 
 /* --- 課題管理 --- */
@@ -1044,14 +1027,14 @@ async function loadTeacherIndividual(){
   const wrap = document.getElementById('individualList');
   if (!res.ok){ wrap.textContent = res.error; return; }
   wrap.innerHTML = res.students.map(s => {
-    const evalRows = s.peerEvals.map(e => `<tr><td>${escapeHtml(e.assignmentId)}</td><td>${escapeHtml(e.contributionText)}</td><td>${escapeHtml(String(e.score))}</td></tr>`).join('');
+    const evalRows = s.peerEvals.map(e => `<tr><td>${escapeHtml(e.date || '')}</td><td>${escapeHtml(e.questionLabel || '')}</td><td>${escapeHtml(e.contributionText)}</td><td>${escapeHtml(String(e.score))}</td></tr>`).join('');
     const ciRows = s.checkins.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.goalText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
     const coRows = s.checkouts.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.contributionText)}</td><td>${escapeHtml(c.prepText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
     return `
       <div class="card" style="background:#fafbfd;">
         <strong>${escapeHtml(s.name)}（${escapeHtml(s.studentId)} ／ 第${escapeHtml(String(s.teamNo))}班）</strong>
         <h3>チーム代表者による貢献評価</h3>
-        <table><thead><tr><th>課題日</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>${evalRows || '<tr><td colspan=3 class="muted">記録なし</td></tr>'}</tbody></table>
+        <table><thead><tr><th>課題日</th><th>問い</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>${evalRows || '<tr><td colspan=4 class="muted">記録なし</td></tr>'}</tbody></table>
         <h3>チェックイン履歴</h3>
         <table><thead><tr><th>日付</th><th>目標</th><th>時刻</th></tr></thead><tbody>${ciRows || '<tr><td colspan=3 class="muted">記録なし</td></tr>'}</tbody></table>
         <h3>チェックアウト履歴</h3>
@@ -1060,36 +1043,139 @@ async function loadTeacherIndividual(){
   }).join('');
 }
 
-/* --- 提示モード --- */
+/* --- 提示モード（新しいタブに掲示板形式で表示） --- */
 
-async function loadPresentList(){
+function updatePresentInfo(){
   const assignmentId = document.getElementById('presentAssignSel').value;
-  const grid = document.getElementById('presentGrid');
-  if (!assignmentId){ grid.innerHTML = ''; return; }
-  const res = await api('teacherPresentationList', { assignmentId });
-  if (!res.ok){ grid.innerHTML = escapeHtml(res.error); return; }
-  presentItems = res.items;
-  if (!presentItems.length){ grid.innerHTML = '<p class="muted">この課題には画像の提出がありません。</p>'; return; }
-  grid.innerHTML = presentItems.map((item, idx) => `
-    <div style="cursor:pointer;text-align:center;" onclick="openPresentOverlay(${idx})">
-      <img src="${item.fileUrl}" style="width:100%;border-radius:8px;border:1px solid var(--border);">
-      <div class="muted">第${item.teamNo}班</div>
-    </div>`).join('');
+  const info = document.getElementById('presentInfo');
+  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
+  if (!a){ info.textContent = ''; return; }
+  const parts = [];
+  if (a.text_prompt) parts.push('テキストの問い：' + a.text_prompt);
+  if (a.file_prompt) parts.push('ファイルの問い：' + a.file_prompt);
+  info.textContent = parts.join(' ／ ') || 'この課題には内容が設定されていません。';
 }
 
-function openPresentOverlay(idx){
-  presentIndex = idx;
-  showPresentAt(idx);
-  document.getElementById('presentOverlay').style.display = 'flex';
+async function openPresentationTab(){
+  const assignmentId = document.getElementById('presentAssignSel').value;
+  if (!assignmentId){ alert('課題を選択してください。'); return; }
+  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
+
+  // ポップアップブロック対策：クリックと同期のタイミングでまず空のタブを開いておく
+  const win = window.open('', '_blank');
+  if (win){
+    win.document.open();
+    win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>読み込み中...</title></head>'
+      + '<body style="font-family:sans-serif;padding:60px;text-align:center;color:#888;">読み込み中...</body></html>');
+    win.document.close();
+  }
+
+  const res = await api('teacherPresentationList', { assignmentId });
+
+  if (!res.ok){
+    if (win) win.document.body.innerHTML = '<p style="padding:40px;color:#c00;font-family:sans-serif;">' + escapeHtml(res.error) + '</p>';
+    else alert(res.error);
+    return;
+  }
+  if (!win){
+    alert('新しいタブを開けませんでした。ブラウザのポップアップブロックを解除してから、もう一度お試しください。');
+    return;
+  }
+  const html = buildPresentationHtml(a, res.items);
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
-function showPresentAt(idx){
-  const item = presentItems[idx];
-  document.getElementById('presentImg').src = item.fileUrl;
-  document.getElementById('presentName').textContent = '第' + item.teamNo + '班';
+
+function buildPresentationHtml(a, items){
+  const dateLabel = a ? escapeHtml(a.date) : '';
+  const textPrompt = a && a.text_prompt ? escapeHtml(a.text_prompt) : '';
+  const filePrompt = a && a.file_prompt ? escapeHtml(a.file_prompt) : '';
+  const promptHtml = [
+    textPrompt ? '<div class="prompt-line"><span class="tag">テキストの問い</span>' + textPrompt + '</div>' : '',
+    filePrompt ? '<div class="prompt-line"><span class="tag">ファイルの問い</span>' + filePrompt + '</div>' : ''
+  ].filter(Boolean).join('');
+
+  // テキストの投稿と画像の投稿は別々の掲示板として組み立てる（上部のタブで切り替える）
+  const textCards = items.map(it => {
+    if (!it.textContent) return '';
+    const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+    return '<div class="card"><div class="team">' + team + '</div>'
+      + '<div class="post-text">' + escapeHtml(it.textContent).replace(/\n/g,'<br>') + '</div></div>';
+  }).filter(Boolean).join('');
+
+  const imageCards = items.map(it => {
+    if (!it.fileUrl) return '';
+    const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+    const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\n/g,'<br>') + '</div>' : '';
+    return '<div class="card"><div class="team">' + team + '</div>'
+      + '<img src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">' + commentHtml + '</div>';
+  }).filter(Boolean).join('');
+
+  const hasText = !!textCards;
+  const hasImage = !!imageCards;
+  const showTabs = hasText && hasImage;
+
+  const textBoardHtml = '<div id="board-text" class="board-wrap">'
+    + (hasText ? '<div class="board">' + textCards + '</div>' : '<p class="empty">この課題にはまだテキストの提出がありません。</p>')
+    + '</div>';
+  const imageBoardHtml = '<div id="board-image" class="board-wrap" style="display:none;">'
+    + (hasImage ? '<div class="board">' + imageCards + '</div>' : '<p class="empty">この課題にはまだ画像の提出がありません。</p>')
+    + '</div>';
+
+  // 両方の種類の提出がある場合のみ、上部にタブを表示して切り替えられるようにする
+  const tabsHtml = showTabs
+    ? '<div class="tabbar">'
+      + '<button id="tab-btn-text" class="tabbtn active" onclick="showBoard(\'text\')">テキスト</button>'
+      + '<button id="tab-btn-image" class="tabbtn" onclick="showBoard(\'image\')">画像</button>'
+      + '</div>'
+    : '';
+
+  // どちらか一方しか提出がない場合は、そちらの掲示板だけを最初から表示する
+  const initialScript = (!hasText && hasImage)
+    ? '<script>document.getElementById("board-text").style.display="none";document.getElementById("board-image").style.display="block";</' + 'script>'
+    : '';
+
+  return '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
+    + '<title>提示モード：' + dateLabel + '</title>'
+    + '<style>'
+    + '*{box-sizing:border-box;}'
+    + 'body{margin:0;padding:28px;background:#eef1f5;font-family:"Hiragino Sans","Yu Gothic",sans-serif;color:#222;}'
+    + 'h1{font-size:22px;margin:0 0 6px;}'
+    + '.prompt-box{background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);}'
+    + '.prompt-line{margin:4px 0;font-size:15px;}'
+    + '.tag{display:inline-block;background:#4a6fa5;color:#fff;font-size:12px;padding:2px 8px;border-radius:4px;margin-right:8px;}'
+    + '.tabbar{display:flex;gap:8px;margin-bottom:20px;}'
+    + '.tabbtn{font-size:15px;font-weight:700;padding:10px 22px;border-radius:8px 8px 0 0;border:1px solid #ccd3dc;'
+    + 'border-bottom:none;background:#dfe4ea;color:#556;cursor:pointer;}'
+    + '.tabbtn.active{background:#fffdf6;color:#3a4a63;box-shadow:0 -2px 6px rgba(0,0,0,0.06);}'
+    + '.board{column-count:3;column-gap:18px;}'
+    + '@media (max-width:1100px){.board{column-count:2;}}'
+    + '@media (max-width:700px){.board{column-count:1;}}'
+    + '.card{break-inside:avoid;background:#fffdf6;border-radius:10px;padding:16px;margin-bottom:18px;'
+    + 'box-shadow:0 2px 8px rgba(0,0,0,0.12);border-top:6px solid #f4c542;}'
+    + '.team{font-weight:700;font-size:15px;margin-bottom:10px;color:#3a4a63;}'
+    + '.card img{max-width:100%;border-radius:6px;display:block;margin-bottom:8px;}'
+    + '.comment{background:#fff6d8;border-radius:6px;padding:8px 10px;font-size:13px;color:#5a4a20;}'
+    + '.post-text{font-size:15px;line-height:1.7;}'
+    + '.empty{color:#888;text-align:center;margin-top:60px;font-size:15px;}'
+    + '</style></head><body>'
+    + '<h1>提示モード：' + dateLabel + '</h1>'
+    + (promptHtml ? '<div class="prompt-box">' + promptHtml + '</div>' : '')
+    + tabsHtml
+    + textBoardHtml
+    + imageBoardHtml
+    + initialScript
+    + '<script>'
+    + 'function showBoard(kind){'
+    + 'document.getElementById("board-text").style.display = (kind==="text") ? "block" : "none";'
+    + 'document.getElementById("board-image").style.display = (kind==="image") ? "block" : "none";'
+    + 'var tt=document.getElementById("tab-btn-text"); if(tt) tt.classList.toggle("active", kind==="text");'
+    + 'var ti=document.getElementById("tab-btn-image"); if(ti) ti.classList.toggle("active", kind==="image");'
+    + '}'
+    + '</' + 'script>'
+    + '</body></html>';
 }
-function presentNext(){ presentIndex = (presentIndex+1) % presentItems.length; showPresentAt(presentIndex); }
-function presentPrev(){ presentIndex = (presentIndex-1+presentItems.length) % presentItems.length; showPresentAt(presentIndex); }
-function closePresentOverlay(){ document.getElementById('presentOverlay').style.display = 'none'; }
 
 /* ---------------- 初期表示 ---------------- */
 document.getElementById('assignDate').value = todayIso();
