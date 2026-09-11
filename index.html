@@ -67,12 +67,14 @@
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th,td{border:1px solid var(--border); padding:7px 8px; text-align:left; vertical-align:top;}
   th{background:#f0f2f5;}
-  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;}
-  .tabs button{
-    background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px 14px;
-    font-size:13px; cursor:pointer;
+  .teacher-menu{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:10px;}
+  .menu-btn{
+    background:#fff; border:1px solid var(--border); border-radius:10px; padding:18px 16px;
+    font-size:15px; font-weight:700; cursor:pointer; text-align:left; color:var(--text);
+    box-shadow:0 1px 4px rgba(0,0,0,0.06);
   }
-  .tabs button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .menu-btn:hover{border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+  .menu-sub{display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:6px;}
   .member-row{border:1px dashed var(--border); border-radius:8px; padding:12px; margin-bottom:10px;}
   .muted{color:var(--muted); font-size:13px; white-space:pre-wrap;}
   .kv{display:flex; justify-content:space-between; font-size:13px; margin:4px 0;}
@@ -234,6 +236,7 @@
   <!-- ===================== 個人ホーム ===================== -->
   <section id="view-student-home" class="view hidden">
     <div class="card">
+      <button class="link-btn" onclick="logout()">&larr; 全体（トップ）に戻る</button>
       <h2 id="studentHomeTitle"></h2>
       <p class="muted" id="studentHomeDate"></p>
       <div id="studentMsg" class="msg"></div>
@@ -276,68 +279,17 @@
 
   <!-- ===================== 教員ホーム ===================== -->
   <section id="view-teacher-home" class="view hidden">
-    <div class="tabs">
-      <button id="tab-btn-assign" onclick="teacherTab('assign')">課題管理</button>
-      <button id="tab-btn-review" onclick="teacherTab('review')">チーム別確認・評価</button>
-      <button id="tab-btn-overview" onclick="teacherTab('overview')">全体一覧</button>
-      <button id="tab-btn-individual" onclick="teacherTab('individual')">個人一覧</button>
-      <button id="tab-btn-present" onclick="teacherTab('present')">提示モード</button>
-    </div>
-
-    <div id="tab-assign" class="card">
-      <h2 id="assignFormTitle">課題（問い）の新規登録</h2>
-      <p class="muted">同じ授業日に複数の問い（テキスト・ファイルそれぞれ）を登録できます。登録すると、その日の課題として学生側にまとめて表示されます。</p>
-      <div id="assignMsg" class="msg"></div>
-      <label>授業日</label>
-      <input type="date" id="assignDate">
-      <label>問い（テキスト）</label>
-      <textarea id="assignTextPrompt"></textarea>
-      <label>問い（ファイル）</label>
-      <textarea id="assignFilePrompt" placeholder="例）本日のワークで作成した写真を添付してください"></textarea>
-      <button class="btn" id="assignSaveBtn" onclick="submitTeacherAssignment()">追加する</button>
-      <button class="btn secondary" id="assignCancelBtn" style="display:none;" onclick="cancelEditAssignment()">新規登録に戻す</button>
-
-      <h3>登録済みの課題（日付ごと）</h3>
-      <table><thead><tr><th>日付</th><th>問い</th><th></th></tr></thead>
-        <tbody id="assignListBody"></tbody>
-      </table>
-    </div>
-
-    <div id="tab-review" class="card hidden">
-      <h2>チーム別 確認・評価</h2>
-      <div class="row">
-        <div>
-          <label>課題（授業日）</label>
-          <select id="reviewAssignSel" onchange="loadTeamReview()"></select>
-        </div>
-        <div>
-          <label>チーム</label>
-          <select id="reviewTeamSel" onchange="loadTeamReview()"></select>
-        </div>
+    <div class="card">
+      <h2 id="teacherHomeTitle"></h2>
+      <p class="muted">メニューを選ぶと、新しいタブでその画面が開きます（他の情報に邪魔されず、集中して確認・操作できます）。</p>
+      <div class="teacher-menu">
+        <button class="menu-btn" onclick="openAssignmentTab()">課題管理<span class="menu-sub">授業日ごとの問い（テキスト・ファイル）の登録・編集・削除</span></button>
+        <button class="menu-btn" onclick="openReviewTab()">チーム別確認・評価<span class="menu-sub">提出内容の確認、S/A/B/C/D評価とコメントの入力</span></button>
+        <button class="menu-btn" onclick="openOverviewTab()">全体一覧<span class="menu-sub">チーム×課題の提出・評価状況の一覧表</span></button>
+        <button class="menu-btn" onclick="openIndividualTab()">個人一覧<span class="menu-sub">学生ごとの貢献評価・チェックイン/チェックアウト一覧表</span></button>
+        <button class="menu-btn" onclick="openPresentationMenuTab()">提示モード<span class="menu-sub">学生に見せる掲示板形式の画面</span></button>
+        <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名/メールの編集、パスワードの再発行・再設定</span></button>
       </div>
-      <div id="reviewBody" class="muted">課題とチームを選択してください。</div>
-    </div>
-
-    <div id="tab-overview" class="card hidden">
-      <h2>全体一覧（チーム × 課題）</h2>
-      <div style="overflow-x:auto;">
-        <table id="overviewTable"><thead><tr id="overviewDateHead"></tr><tr id="overviewHead"></tr></thead><tbody id="overviewBody"></tbody></table>
-      </div>
-      <p class="muted">E = 未提出。クリックすると該当のチーム別評価画面に移動します。</p>
-    </div>
-
-    <div id="tab-individual" class="card hidden">
-      <h2>個人一覧</h2>
-      <div id="individualList"></div>
-    </div>
-
-    <div id="tab-present" class="card hidden">
-      <h2>提示モード（学生に見せる画面）</h2>
-      <p class="muted">課題を選ぶと、新しいタブに掲示板形式で提出内容が表示されます（授業でそのまま投影できます）。</p>
-      <label>課題（授業日）</label>
-      <select id="presentAssignSel" onchange="updatePresentInfo()"></select>
-      <p class="muted" id="presentInfo"></p>
-      <button class="btn" id="presentOpenBtn" onclick="openPresentationTab()">新しいタブで表示する</button>
     </div>
   </section>
 
@@ -772,8 +724,7 @@ async function doTeacherLogin(){
   if (!res.ok){ setMsg('teacherLoginMsg', res.error); return; }
   session = { role: 'teacher', teacherName: res.teacherName };
   updateTopbar();
-  applyTeacherHomeInit(res.assignments || [], res.teams || []);
-  teacherTab('assign');
+  document.getElementById('teacherHomeTitle').textContent = res.teacherName + '先生';
   showView('view-teacher-home');
 }
 
@@ -790,395 +741,766 @@ function computeAssignmentLabels(assignments){
   return { labelOf, countByDate };
 }
 
-function applyTeacherHomeInit(assignments, teams){
-  window._assignmentCache = assignments;
-  const { labelOf, countByDate } = computeAssignmentLabels(assignments);
-
-  // 課題管理タブの一覧（日付ごとにグループ化して表示）
-  let lastDate = null;
-  let rowsHtml = '';
-  assignments.forEach(a => {
-    if (a.date !== lastDate){
-      rowsHtml += `<tr style="background:#f0f2f5;"><td colspan="3"><strong>${escapeHtml(a.date)}</strong></td></tr>`;
-      lastDate = a.date;
-    }
-    const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignment_id] + '：') : '';
-    const promptSummary = [a.text_prompt ? 'テキスト：' + a.text_prompt : '', a.file_prompt ? 'ファイル：' + a.file_prompt : '']
-      .filter(Boolean).join(' ／ ');
-    rowsHtml += `
-      <tr>
-        <td></td>
-        <td>${escapeHtml(label)}${escapeHtml(promptSummary)}</td>
-        <td>
-          <button class="link-btn" onclick="editAssignment('${a.assignment_id}')">編集</button>
-          &nbsp;|&nbsp;
-          <button class="link-btn" style="color:var(--danger);" onclick="deleteTeacherAssignment('${a.assignment_id}')">削除</button>
-        </td>
-      </tr>`;
-  });
-  document.getElementById('assignListBody').innerHTML = rowsHtml;
-
-  // チーム別確認・評価タブ／提示モードタブのセレクト
-  // 日付だけでなく問いの内容（プレビュー）も表示し、同日に複数ある場合は問い番号で区別する
-  const opts = assignments.map(a => {
-    const qLabel = countByDate[a.date] > 1 ? ('（問' + labelOf[a.assignment_id] + '）') : '';
-    const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
-    const label = a.date + qLabel + '：' + preview;
-    return `<option value="${a.assignment_id}">${escapeHtml(label)}</option>`;
-  }).join('');
-  document.getElementById('reviewAssignSel').innerHTML = opts;
-  document.getElementById('presentAssignSel').innerHTML = opts;
-  document.getElementById('reviewTeamSel').innerHTML = teams.map(t =>
-    `<option value="${t.teamNo}">第${t.teamNo}班 ${escapeHtml(t.teamName)}</option>`).join('');
-}
-
-function teacherTab(name){
-  ['assign','review','overview','individual','present'].forEach(t => {
-    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
-    document.getElementById('tab-btn-'+t).classList.toggle('active', t === name);
-  });
-  if (name === 'overview') loadTeacherOverview();
-  if (name === 'individual') loadTeacherIndividual();
-  if (name === 'review') loadTeamReview();
-  if (name === 'present') updatePresentInfo();
-}
-
-/* --- 課題管理 --- */
-
-let _editingAssignmentId = null;
-
-async function submitTeacherAssignment(){
-  const date = document.getElementById('assignDate').value;
-  const textPrompt = document.getElementById('assignTextPrompt').value;
-  const filePrompt = document.getElementById('assignFilePrompt').value;
-  if (!date){ setMsg('assignMsg','授業日を選択してください。'); return; }
-  const payload = { date, textPrompt, filePrompt };
-  if (_editingAssignmentId) payload.assignmentId = _editingAssignmentId;
-  const res = await api('teacherCreateAssignment', payload);
-  if (!res.ok){ setMsg('assignMsg', res.error); return; }
-  setMsg('assignMsg', _editingAssignmentId ? '更新しました。' : '追加しました。', 'success');
-  cancelEditAssignment();
-  await refreshTeacherHome();
-}
-
-async function refreshTeacherHome(){
-  const res = await api('teacherHomeInit', {});
-  if (!res.ok) return;
-  applyTeacherHomeInit(res.assignments || [], res.teams || []);
-}
-
-function editAssignment(assignmentId){
-  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
-  if (!a) return;
-  _editingAssignmentId = assignmentId;
-  document.getElementById('assignDate').value = a.date;
-  document.getElementById('assignTextPrompt').value = a.text_prompt;
-  document.getElementById('assignFilePrompt').value = a.file_prompt;
-  document.getElementById('assignFormTitle').textContent = '課題（問い）の編集';
-  document.getElementById('assignSaveBtn').textContent = '更新する';
-  document.getElementById('assignCancelBtn').style.display = 'inline-block';
-  window.scrollTo(0,0);
-}
-
-function cancelEditAssignment(){
-  _editingAssignmentId = null;
-  document.getElementById('assignTextPrompt').value = '';
-  document.getElementById('assignFilePrompt').value = '';
-  document.getElementById('assignDate').value = todayIso();
-  document.getElementById('assignFormTitle').textContent = '課題（問い）の新規登録';
-  document.getElementById('assignSaveBtn').textContent = '追加する';
-  document.getElementById('assignCancelBtn').style.display = 'none';
-}
-
-async function deleteTeacherAssignment(assignmentId){
-  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
-  const label = a ? (a.date + '　' + (a.text_prompt || a.file_prompt || '')) : assignmentId;
-  const sure = confirm('この課題（' + label + '）を削除しますか？\n削除すると学生側の一覧からも表示されなくなります（提出済みの内容自体はスプレッドシートに残ります）。');
-  if (!sure) return;
-  const res = await api('teacherDeleteAssignment', { assignmentId });
-  if (!res.ok){ setMsg('assignMsg', res.error); return; }
-  setMsg('assignMsg','削除しました。', 'success');
-  await refreshTeacherHome();
-}
-
-/* --- チーム別確認・評価 --- */
-
-async function loadTeamReview(){
-  const assignmentId = document.getElementById('reviewAssignSel').value;
-  const teamNo = document.getElementById('reviewTeamSel').value;
-  const body = document.getElementById('reviewBody');
-  if (!assignmentId || !teamNo){ body.innerHTML = '課題とチームを選択してください。'; return; }
-
-  const res = await api('teacherTeamSubmission', { assignmentId, teamNo });
-  if (!res.ok){ body.innerHTML = escapeHtml(res.error); return; }
-  const sub = res.submission;
-  const ev = res.evaluation;
-
-  let html = '';
-  if (!sub){
-    html += '<p class="muted">この課題は未提出です（評価：E）。</p>';
-  } else {
-    html += '<h3>提出内容</h3>';
-    html += '<p style="white-space:pre-wrap;">' + escapeHtml(sub.text_content) + '</p>';
-    if (sub.file_url) html += '<img class="thumb" src="'+sub.file_url+'">';
-    html += '<p class="muted">提出者：'+escapeHtml(sub.submitted_by)+' ／ 投稿日：'+escapeHtml(sub.first_submitted_at || sub.submitted_at) +
-      (sub.submitted_at && sub.submitted_at !== sub.first_submitted_at ? ' ／ 更新日：'+escapeHtml(sub.submitted_at) : '') + '</p>';
-  }
-
-  html += '<h3>チーム代表者によるメンバー貢献評価</h3>';
-  html += '<table><thead><tr><th>氏名</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>';
-  res.members.forEach(m => {
-    html += '<tr><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.contributionText)+'</td><td>'+escapeHtml(String(m.score))+'</td></tr>';
-  });
-  html += '</tbody></table>';
-
-  html += `
-    <h3>教員評価</h3>
-    <label>評価</label>
-    <select id="teacherGrade">
-      ${['S','A','B','C','D','E'].map(g => `<option value="${g}" ${ev && ev.grade===g ? 'selected':''}>${g}</option>`).join('')}
-    </select>
-    <label>コメント（学生に表示されます）</label>
-    <textarea id="teacherComment">${ev ? escapeHtml(ev.comment) : ''}</textarea>
-    <button class="btn" onclick="saveTeacherEvaluation()">評価を保存</button>
-    <div id="evalMsg" class="msg"></div>
-  `;
-  body.innerHTML = html;
-}
-
-async function saveTeacherEvaluation(){
-  const assignmentId = document.getElementById('reviewAssignSel').value;
-  const teamNo = document.getElementById('reviewTeamSel').value;
-  const grade = document.getElementById('teacherGrade').value;
-  const comment = document.getElementById('teacherComment').value;
-  const res = await api('teacherSetEvaluation', { assignmentId, teamNo, grade, comment, teacherName: session.teacherName });
-  if (!res.ok){ setMsg('evalMsg', res.error); return; }
-  setMsg('evalMsg','保存しました。', 'success');
-}
-
-/* --- 全体一覧 --- */
-
+// "2026-09-14 10:00:00" -> "09/14 10:00"（一覧表をコンパクトに表示するため）
 function shortTs(ts){
-  // "2026-09-14 10:00:00" -> "09/14 10:00"（一覧表をコンパクトに表示するため）
   if (!ts) return '';
   const m = String(ts).match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   return m ? (m[1]+'/'+m[2]+' '+m[3]+':'+m[4]) : String(ts);
 }
 
-async function loadTeacherOverview(){
+/* =========================================================
+   教員メニュー
+   各機能（課題管理／チーム別確認・評価／全体一覧／個人一覧／提示モード）は、
+   それぞれ独立した新しいタブ（自己完結したHTMLドキュメント）として開く。
+   タブ同士は状態を共有せず、開くたびに最新データをサーバーから取得する。
+   ========================================================= */
+
+const TAB_LOADING_HTML = '<div id="loadingIndicator" class="loading-indicator" hidden><div class="loading-box"><div class="loading-spinner"></div><div>通信中...</div></div></div>';
+
+// 新しいタブ内で使う共通スタイル（メインページの見た目に近づける）
+function tabCommonStyle(){
+  return `
+    *{box-sizing:border-box;}
+    body{margin:0;padding:28px;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#1f2430;}
+    h1{font-size:20px;margin:0 0 4px;}
+    h2{font-size:16px;margin:20px 0 8px;}
+    h3{font-size:14px;margin:14px 0 6px;}
+    .muted{color:#666f7d;font-size:13px;white-space:pre-wrap;}
+    .card{background:#fff;border:1px solid #dde1e6;border-radius:10px;padding:20px 22px;margin-bottom:18px;}
+    table{border-collapse:collapse;width:100%;}
+    th,td{border:1px solid #dde1e6;padding:8px 10px;font-size:13px;text-align:left;vertical-align:top;}
+    th{background:#f0f2f5;}
+    .btn{background:#2b5fd9;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;}
+    .btn:hover{background:#1c46ad;}
+    .btn.secondary{background:#eef1f5;color:#1f2430;border:1px solid #dde1e6;}
+    .btn.small{padding:5px 12px;font-size:12px;margin-top:0;}
+    .btn.danger{background:#c0392b;}
+    .btn:disabled{opacity:0.6;cursor:default;}
+    .link-btn{background:none;border:none;color:#2b5fd9;cursor:pointer;padding:0;font-size:13px;text-decoration:underline;}
+    label{display:block;font-size:13px;color:#666f7d;margin:10px 0 4px;}
+    textarea,input,select{font-family:inherit;font-size:14px;padding:8px;border-radius:6px;border:1px solid #dde1e6;width:100%;margin:0 0 4px;box-sizing:border-box;background:#fff;color:#1f2430;}
+    textarea{min-height:70px;resize:vertical;}
+    .row{display:flex;gap:16px;flex-wrap:wrap;}
+    .row > div{flex:1;min-width:180px;}
+    .msg{font-size:13px;margin:6px 0;min-height:1.2em;}
+    .msg.success{color:#1a8a4a;}
+    .msg.error{color:#c0392b;}
+    .thumb{max-width:100%;border-radius:8px;border:1px solid #dde1e6;margin:8px 0;}
+    .grade-pill{display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;font-weight:700;font-size:12px;color:#fff;}
+    .gS{background:#1a8a4a;} .gA{background:#2b5fd9;} .gB{background:#6c757d;} .gC{background:#c9820a;} .gD{background:#c0392b;} .gE{background:#adb5bd;}
+    .loading-indicator{position:fixed;inset:0;z-index:2000;background:rgba(20,24,32,0.35);display:flex;align-items:center;justify-content:center;}
+    .loading-indicator[hidden]{display:none;}
+    .loading-box{background:#fff;color:#1f2430;border-radius:16px;padding:26px 36px;box-shadow:0 10px 40px rgba(0,0,0,0.3);display:flex;flex-direction:column;align-items:center;gap:14px;font-size:15px;font-weight:700;}
+    .loading-spinner{width:34px;height:34px;border-radius:50%;border:5px solid #ddd;border-top-color:#2b5fd9;animation:loading-spin 0.8s linear infinite;}
+    @keyframes loading-spin{to{transform:rotate(360deg);}}
+    .table-wrap{overflow-x:auto;}
+  `;
+}
+
+// 新しいタブ内で使う共通スクリプト（通信処理など）。文字列として組み立て、
+// 各タブのドキュメントに <script> として埋め込む。
+function tabCommonScript(){
+  return `
+    const API_URL = ${JSON.stringify(API_URL)};
+    function escapeHtml(s){
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+      });
+    }
+    function setMsg(id, text, cls){
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg' + (cls ? ' ' + cls : '');
+    }
+    function todayIso(){
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function sleep(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
+    let _loadingCount = 0;
+    function showLoading(){
+      _loadingCount++;
+      const el = document.getElementById('loadingIndicator');
+      if (el) el.hidden = false;
+    }
+    function hideLoading(){
+      _loadingCount = Math.max(0, _loadingCount - 1);
+      if (_loadingCount === 0){
+        const el = document.getElementById('loadingIndicator');
+        if (el) el.hidden = true;
+      }
+    }
+    async function apiRequestOnce(action, payload){
+      const encoded = encodeURIComponent(JSON.stringify(payload));
+      const hasFile = !!payload.fileBase64;
+      const useGet = !hasFile && encoded.length < 6000;
+      let res;
+      if (useGet){ res = await fetch(API_URL + '?data=' + encoded, { method: 'GET' }); }
+      else { res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) }); }
+      const text = await res.text();
+      return JSON.parse(text);
+    }
+    async function api(action, data){
+      const payload = Object.assign({ action: action }, data || {});
+      const MAX_ATTEMPTS = 3;
+      showLoading();
+      try {
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
+          try {
+            const json = await apiRequestOnce(action, payload);
+            const looksLikeDroppedRequest = json && json.ok === false && /不明なアクションです/.test(json.error || '');
+            if (looksLikeDroppedRequest && attempt < MAX_ATTEMPTS){ await sleep(400 * attempt); continue; }
+            return json;
+          } catch (err){
+            if (attempt < MAX_ATTEMPTS){ await sleep(400 * attempt); continue; }
+          }
+        }
+        alert('サーバーへの通信に失敗しました（' + action + '）。時間をおいて再度お試しください。');
+        return { ok: false, error: '通信エラー' };
+      } finally { hideLoading(); }
+    }
+    function computeAssignmentLabels(assignments){
+      const seqByDate = {};
+      const labelOf = {};
+      assignments.forEach(function(a){
+        seqByDate[a.date] = (seqByDate[a.date] || 0) + 1;
+        labelOf[a.assignment_id] = seqByDate[a.date];
+      });
+      const countByDate = {};
+      assignments.forEach(function(a){ countByDate[a.date] = (countByDate[a.date] || 0) + 1; });
+      return { labelOf: labelOf, countByDate: countByDate };
+    }
+  `;
+}
+
+// クリックと同期のタイミングでまず空のタブを開く（ポップアップブロック対策）
+function openBlankTab(title){
+  const win = window.open('', '_blank');
+  if (win){
+    win.document.open();
+    win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title></head>'
+      + '<body style="font-family:sans-serif;padding:60px;text-align:center;color:#888;">読み込み中...</body></html>');
+    win.document.close();
+  }
+  return win;
+}
+
+function notifyPopupBlocked(){
+  alert('新しいタブを開けませんでした。ブラウザのポップアップブロックを解除してから、もう一度お試しください。');
+}
+
+function writeTabDoc(win, title, bodyHtml, extraCss, extraScript){
+  if (!win) return;
+  const html = '<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title>'
+    + '<style>' + tabCommonStyle() + (extraCss || '') + '</style></head><body>'
+    + TAB_LOADING_HTML
+    + bodyHtml
+    + '<script>' + tabCommonScript() + (extraScript || '') + '</' + 'script>'
+    + '</body></html>';
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+// JSONをタブ生成用スクリプトに埋め込む際、万一データの中にスクリプト終了タグと
+// 同じ文字列が含まれていてもHTML解析が壊れないようにする
+function embedJson(value){
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function reportTabError(win, error){
+  if (win) win.document.body.innerHTML = '<p style="padding:40px;color:#c00;font-family:sans-serif;">' + escapeHtml(error) + '</p>';
+}
+
+/* --- 課題管理タブ --- */
+
+async function openAssignmentTab(){
+  const win = openBlankTab('課題管理');
+  if (!win){ notifyPopupBlocked(); return; }
+  const res = await api('teacherHomeInit', {});
+  if (!res.ok){ reportTabError(win, res.error); return; }
+
+  const bodyHtml = `
+    <h1>課題管理</h1>
+    <p class="muted">同じ授業日に複数の問い（テキスト・ファイルそれぞれ）を登録できます。登録すると、その日の課題として学生側にまとめて表示されます。</p>
+    <div class="card">
+      <h2 id="assignFormTitle">課題（問い）の新規登録</h2>
+      <div id="assignMsg" class="msg"></div>
+      <label>授業日</label>
+      <input type="date" id="assignDate">
+      <label>問い（テキスト）</label>
+      <textarea id="assignTextPrompt"></textarea>
+      <label>問い（ファイル）</label>
+      <textarea id="assignFilePrompt" placeholder="例）本日のワークで作成した写真を添付してください"></textarea>
+      <button class="btn" id="assignSaveBtn" onclick="submitTeacherAssignment()">追加する</button>
+      <button class="btn secondary" id="assignCancelBtn" style="display:none;" onclick="cancelEditAssignment()">新規登録に戻す</button>
+    </div>
+    <div class="card">
+      <h2>登録済みの課題（日付ごと）</h2>
+      <table><thead><tr><th>日付</th><th>問い</th><th></th></tr></thead><tbody id="assignListBody"></tbody></table>
+    </div>
+  `;
+
+  const extraScript = `
+    let ASSIGNMENTS = ${embedJson(res.assignments || [])};
+    let _editingAssignmentId = null;
+
+    function renderAssignmentList(){
+      const info = computeAssignmentLabels(ASSIGNMENTS);
+      const labelOf = info.labelOf, countByDate = info.countByDate;
+      let lastDate = null;
+      let rowsHtml = '';
+      ASSIGNMENTS.forEach(function(a){
+        if (a.date !== lastDate){
+          rowsHtml += '<tr style="background:#f0f2f5;"><td colspan="3"><strong>' + escapeHtml(a.date) + '</strong></td></tr>';
+          lastDate = a.date;
+        }
+        const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignment_id] + '：') : '';
+        const promptSummary = [a.text_prompt ? 'テキスト：' + a.text_prompt : '', a.file_prompt ? 'ファイル：' + a.file_prompt : '']
+          .filter(Boolean).join(' ／ ');
+        rowsHtml += '<tr><td></td><td>' + escapeHtml(label) + escapeHtml(promptSummary) + '</td><td>'
+          + '<button class="link-btn" data-action="edit" data-id="' + a.assignment_id + '">編集</button>'
+          + ' | <button class="link-btn" data-action="delete" data-id="' + a.assignment_id + '" style="color:#c0392b;">削除</button>'
+          + '</td></tr>';
+      });
+      document.getElementById('assignListBody').innerHTML = rowsHtml || '<tr><td colspan="3" class="muted">登録された課題はまだありません。</td></tr>';
+    }
+
+    document.getElementById('assignListBody').addEventListener('click', function(e){
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-id');
+      if (btn.getAttribute('data-action') === 'edit') editAssignment(id);
+      if (btn.getAttribute('data-action') === 'delete') deleteTeacherAssignment(id);
+    });
+
+    async function refreshAssignmentList(){
+      const res = await api('teacherHomeInit', {});
+      if (!res.ok) return;
+      ASSIGNMENTS = res.assignments || [];
+      renderAssignmentList();
+    }
+
+    async function submitTeacherAssignment(){
+      const date = document.getElementById('assignDate').value;
+      const textPrompt = document.getElementById('assignTextPrompt').value;
+      const filePrompt = document.getElementById('assignFilePrompt').value;
+      if (!date){ setMsg('assignMsg','授業日を選択してください。'); return; }
+      const payload = { date: date, textPrompt: textPrompt, filePrompt: filePrompt };
+      if (_editingAssignmentId) payload.assignmentId = _editingAssignmentId;
+      const res = await api('teacherCreateAssignment', payload);
+      if (!res.ok){ setMsg('assignMsg', res.error); return; }
+      setMsg('assignMsg', _editingAssignmentId ? '更新しました。' : '追加しました。', 'success');
+      cancelEditAssignment();
+      await refreshAssignmentList();
+    }
+
+    function editAssignment(assignmentId){
+      const a = ASSIGNMENTS.find(function(x){ return x.assignment_id === assignmentId; });
+      if (!a) return;
+      _editingAssignmentId = assignmentId;
+      document.getElementById('assignDate').value = a.date;
+      document.getElementById('assignTextPrompt').value = a.text_prompt;
+      document.getElementById('assignFilePrompt').value = a.file_prompt;
+      document.getElementById('assignFormTitle').textContent = '課題（問い）の編集';
+      document.getElementById('assignSaveBtn').textContent = '更新する';
+      document.getElementById('assignCancelBtn').style.display = 'inline-block';
+      window.scrollTo(0,0);
+    }
+
+    function cancelEditAssignment(){
+      _editingAssignmentId = null;
+      document.getElementById('assignTextPrompt').value = '';
+      document.getElementById('assignFilePrompt').value = '';
+      document.getElementById('assignDate').value = todayIso();
+      document.getElementById('assignFormTitle').textContent = '課題（問い）の新規登録';
+      document.getElementById('assignSaveBtn').textContent = '追加する';
+      document.getElementById('assignCancelBtn').style.display = 'none';
+    }
+
+    async function deleteTeacherAssignment(assignmentId){
+      const a = ASSIGNMENTS.find(function(x){ return x.assignment_id === assignmentId; });
+      const label = a ? (a.date + '　' + (a.text_prompt || a.file_prompt || '')) : assignmentId;
+      const sure = confirm('この課題（' + label + '）を削除しますか？削除すると学生側の一覧からも表示されなくなります（提出済みの内容自体はスプレッドシートに残ります）。');
+      if (!sure) return;
+      const res = await api('teacherDeleteAssignment', { assignmentId: assignmentId });
+      if (!res.ok){ setMsg('assignMsg', res.error); return; }
+      setMsg('assignMsg','削除しました。', 'success');
+      await refreshAssignmentList();
+    }
+
+    document.getElementById('assignDate').value = todayIso();
+    renderAssignmentList();
+  `;
+
+  writeTabDoc(win, '課題管理', bodyHtml, '', extraScript);
+}
+
+/* --- チーム別確認・評価タブ --- */
+
+async function openReviewTab(){
+  const win = openBlankTab('チーム別確認・評価');
+  if (!win){ notifyPopupBlocked(); return; }
+  const res = await api('teacherHomeInit', {});
+  if (!res.ok){ reportTabError(win, res.error); return; }
+
+  const bodyHtml = `
+    <h1>チーム別 確認・評価</h1>
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>課題（授業日）</label>
+          <select id="reviewAssignSel"></select>
+        </div>
+        <div>
+          <label>チーム</label>
+          <select id="reviewTeamSel"></select>
+        </div>
+      </div>
+      <div id="reviewBody" class="muted">課題とチームを選択してください。</div>
+    </div>
+  `;
+
+  const extraScript = `
+    const ASSIGNMENTS = ${embedJson(res.assignments || [])};
+    const TEAMS = ${embedJson(res.teams || [])};
+    const TEACHER_NAME = ${embedJson(session.teacherName || '')};
+
+    function renderSelects(){
+      const info = computeAssignmentLabels(ASSIGNMENTS);
+      const labelOf = info.labelOf, countByDate = info.countByDate;
+      const opts = ASSIGNMENTS.map(function(a){
+        const qLabel = countByDate[a.date] > 1 ? ('（問' + labelOf[a.assignment_id] + '）') : '';
+        const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
+        const label = a.date + qLabel + '：' + preview;
+        return '<option value="' + a.assignment_id + '">' + escapeHtml(label) + '</option>';
+      }).join('');
+      document.getElementById('reviewAssignSel').innerHTML = opts;
+      document.getElementById('reviewTeamSel').innerHTML = TEAMS.map(function(t){
+        return '<option value="' + t.teamNo + '">第' + t.teamNo + '班 ' + escapeHtml(t.teamName) + '</option>';
+      }).join('');
+    }
+
+    async function loadTeamReview(){
+      const assignmentId = document.getElementById('reviewAssignSel').value;
+      const teamNo = document.getElementById('reviewTeamSel').value;
+      const body = document.getElementById('reviewBody');
+      if (!assignmentId || !teamNo){ body.innerHTML = '課題とチームを選択してください。'; return; }
+
+      const res = await api('teacherTeamSubmission', { assignmentId: assignmentId, teamNo: teamNo });
+      if (!res.ok){ body.innerHTML = escapeHtml(res.error); return; }
+      const sub = res.submission;
+      const ev = res.evaluation;
+
+      let html = '';
+      if (!sub){
+        html += '<p class="muted">この課題は未提出です（評価：E）。</p>';
+      } else {
+        html += '<h3>提出内容</h3>';
+        html += '<p style="white-space:pre-wrap;">' + escapeHtml(sub.text_content) + '</p>';
+        if (sub.file_url) html += '<img class="thumb" src="' + sub.file_url + '">';
+        html += '<p class="muted">提出者：' + escapeHtml(sub.submitted_by) + ' ／ 投稿日：' + escapeHtml(sub.first_submitted_at || sub.submitted_at)
+          + (sub.submitted_at && sub.submitted_at !== sub.first_submitted_at ? ' ／ 更新日：' + escapeHtml(sub.submitted_at) : '') + '</p>';
+      }
+
+      html += '<h3>チーム代表者によるメンバー貢献評価</h3>';
+      html += '<table><thead><tr><th>氏名</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>';
+      res.members.forEach(function(m){
+        html += '<tr><td>' + escapeHtml(m.name) + '</td><td>' + escapeHtml(m.contributionText) + '</td><td>' + escapeHtml(String(m.score)) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+
+      const grades = ['S','A','B','C','D','E'];
+      let gradeOptsHtml = '';
+      grades.forEach(function(g){
+        const selected = (ev && ev.grade === g) ? ' selected' : '';
+        gradeOptsHtml += '<option value="' + g + '"' + selected + '>' + g + '</option>';
+      });
+
+      html += '<h3>教員評価</h3>'
+        + '<label>評価</label>'
+        + '<select id="teacherGrade">' + gradeOptsHtml + '</select>'
+        + '<label>コメント（学生に表示されます）</label>'
+        + '<textarea id="teacherComment">' + (ev ? escapeHtml(ev.comment) : '') + '</textarea>'
+        + '<button class="btn" onclick="saveTeacherEvaluation()">評価を保存</button>'
+        + '<div id="evalMsg" class="msg"></div>';
+      body.innerHTML = html;
+    }
+
+    async function saveTeacherEvaluation(){
+      const assignmentId = document.getElementById('reviewAssignSel').value;
+      const teamNo = document.getElementById('reviewTeamSel').value;
+      const grade = document.getElementById('teacherGrade').value;
+      const comment = document.getElementById('teacherComment').value;
+      const res = await api('teacherSetEvaluation', { assignmentId: assignmentId, teamNo: teamNo, grade: grade, comment: comment, teacherName: TEACHER_NAME });
+      if (!res.ok){ setMsg('evalMsg', res.error); return; }
+      setMsg('evalMsg','保存しました。', 'success');
+    }
+
+    document.getElementById('reviewAssignSel').addEventListener('change', loadTeamReview);
+    document.getElementById('reviewTeamSel').addEventListener('change', loadTeamReview);
+    renderSelects();
+  `;
+
+  writeTabDoc(win, 'チーム別確認・評価', bodyHtml, '', extraScript);
+}
+
+/* --- 全体一覧タブ（表示専用のため、この場で静的なHTMLとして組み立てる） --- */
+
+async function openOverviewTab(){
+  const win = openBlankTab('全体一覧');
+  if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherOverview', {});
-  if (!res.ok) return;
+  if (!res.ok){ reportTabError(win, res.error); return; }
 
   const { labelOf, countByDate } = computeAssignmentLabels(
     res.assignmentDates.map(a => ({ assignment_id: a.assignmentId, date: a.date }))
   );
 
-  // 1行目：日付（同じ日付が続く分だけ横に結合）
   let dateHeadHtml = '<th></th>';
   let i = 0;
   while (i < res.assignmentDates.length){
     const date = res.assignmentDates[i].date;
     let span = 0;
     while (i + span < res.assignmentDates.length && res.assignmentDates[i + span].date === date) span++;
-    dateHeadHtml += '<th colspan="'+span+'">'+escapeHtml(date)+'</th>';
+    dateHeadHtml += '<th colspan="' + span + '">' + escapeHtml(date) + '</th>';
     i += span;
   }
-  document.getElementById('overviewDateHead').innerHTML = dateHeadHtml;
 
-  // 2行目：問い番号（同じ日付に複数ある場合のみ表示）
-  document.getElementById('overviewHead').innerHTML =
-    '<th>班</th>' + res.assignmentDates.map(a => {
-      const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignmentId]) : '';
-      return '<th>'+escapeHtml(label)+'</th>';
-    }).join('');
-  document.getElementById('overviewBody').innerHTML = res.matrix.map(row => {
+  const qHeadHtml = '<th>班</th>' + res.assignmentDates.map(a => {
+    const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignmentId]) : '';
+    return '<th>' + escapeHtml(label) + '</th>';
+  }).join('');
+
+  const bodyRowsHtml = res.matrix.map(row => {
     const cells = row.cells.map(c => {
       const g = c.grade || (c.submitted ? '' : 'E');
-      const cls = g ? 'grade-pill g'+g : '';
-      const badge = g ? '<span class="'+cls+'">'+g+'</span>' : (c.submitted ? '提出済' : '');
+      const badge = g ? '<span class="grade-pill g' + g + '">' + g + '</span>' : (c.submitted ? '提出済' : '');
       let tsLines = '';
-      let tooltip = '';
       if (c.submitted){
-        tooltip = '投稿日: ' + escapeHtml(c.postedAt || '') +
-          (c.updatedAt && c.updatedAt !== c.postedAt ? ' ／ 更新日: ' + escapeHtml(c.updatedAt) : '');
-        tsLines = '<div class="muted" style="font-size:10px;line-height:1.3;">投稿 '+escapeHtml(shortTs(c.postedAt));
-        if (c.updatedAt && c.updatedAt !== c.postedAt){
-          tsLines += '<br>更新 '+escapeHtml(shortTs(c.updatedAt));
-        }
+        tsLines = '<div class="muted" style="font-size:10px;line-height:1.3;">投稿 ' + escapeHtml(shortTs(c.postedAt));
+        if (c.updatedAt && c.updatedAt !== c.postedAt){ tsLines += '<br>更新 ' + escapeHtml(shortTs(c.updatedAt)); }
         tsLines += '</div>';
       }
-      return `<td style="cursor:pointer" title="${tooltip}" onclick="jumpToReview('${c.assignmentId}','${row.teamNo}')">${badge}${tsLines}</td>`;
+      return '<td>' + badge + tsLines + '</td>';
     }).join('');
-    return '<tr><td>第'+row.teamNo+'班<br><span class="muted">'+escapeHtml(row.teamName)+'</span></td>'+cells+'</tr>';
+    return '<tr><td>第' + row.teamNo + '班<br><span class="muted">' + escapeHtml(row.teamName) + '</span></td>' + cells + '</tr>';
   }).join('');
+
+  const bodyHtml = `
+    <h1>全体一覧（チーム × 課題）</h1>
+    <p class="muted">E = 未提出。表示内容はこのタブを開いた時点のものです。最新の状態を見るには、メニューからもう一度開き直してください。</p>
+    <div class="card table-wrap">
+      <table><thead><tr>${dateHeadHtml}</tr><tr>${qHeadHtml}</tr></thead><tbody>${bodyRowsHtml}</tbody></table>
+    </div>
+  `;
+
+  writeTabDoc(win, '全体一覧', bodyHtml, '', '');
 }
 
-function jumpToReview(assignmentId, teamNo){
-  teacherTab('review');
-  document.getElementById('reviewAssignSel').value = assignmentId;
-  document.getElementById('reviewTeamSel').value = teamNo;
-  loadTeamReview();
-}
+/* --- 個人一覧タブ（すべての個人を並べた1枚の大きな表） --- */
 
-/* --- 個人一覧 --- */
-
-async function loadTeacherIndividual(){
+async function openIndividualTab(){
+  const win = openBlankTab('個人一覧');
+  if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherIndividualOverview', {});
-  const wrap = document.getElementById('individualList');
-  if (!res.ok){ wrap.textContent = res.error; return; }
-  wrap.innerHTML = res.students.map(s => {
-    const evalRows = s.peerEvals.map(e => `<tr><td>${escapeHtml(e.date || '')}</td><td>${escapeHtml(e.questionLabel || '')}</td><td>${escapeHtml(e.contributionText)}</td><td>${escapeHtml(String(e.score))}</td></tr>`).join('');
-    const ciRows = s.checkins.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.goalText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
-    const coRows = s.checkouts.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.contributionText)}</td><td>${escapeHtml(c.prepText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
-    return `
-      <div class="card" style="background:#fafbfd;">
-        <strong>${escapeHtml(s.name)}（${escapeHtml(s.studentId)} ／ 第${escapeHtml(String(s.teamNo))}班）</strong>
-        <h3>チーム代表者による貢献評価</h3>
-        <table><thead><tr><th>課題日</th><th>問い</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>${evalRows || '<tr><td colspan=4 class="muted">記録なし</td></tr>'}</tbody></table>
-        <h3>チェックイン履歴</h3>
-        <table><thead><tr><th>日付</th><th>目標</th><th>時刻</th></tr></thead><tbody>${ciRows || '<tr><td colspan=3 class="muted">記録なし</td></tr>'}</tbody></table>
-        <h3>チェックアウト履歴</h3>
-        <table><thead><tr><th>日付</th><th>貢献できたこと</th><th>次回への準備</th><th>時刻</th></tr></thead><tbody>${coRows || '<tr><td colspan=4 class="muted">記録なし</td></tr>'}</tbody></table>
-      </div>`;
+  if (!res.ok){ reportTabError(win, res.error); return; }
+
+  const students = (res.students || []).slice().sort((a, b) => {
+    const t = Number(a.teamNo) - Number(b.teamNo);
+    if (t !== 0) return t;
+    return String(a.studentId) < String(b.studentId) ? -1 : (String(a.studentId) > String(b.studentId) ? 1 : 0);
+  });
+
+  const rowsHtml = students.map(s => {
+    const evalCell = (s.peerEvals || []).map(e =>
+      '<div>' + escapeHtml(e.date || '') + (e.questionLabel ? '（' + escapeHtml(e.questionLabel).slice(0,20) + '）' : '')
+      + '：' + escapeHtml(e.contributionText) + '（' + escapeHtml(String(e.score)) + '点）</div>'
+    ).join('') || '<span class="muted">記録なし</span>';
+
+    const ciCell = (s.checkins || []).map(c =>
+      '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>'
+    ).join('') || '<span class="muted">記録なし</span>';
+
+    const coCell = (s.checkouts || []).map(c =>
+      '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>'
+    ).join('') || '<span class="muted">記録なし</span>';
+
+    return '<tr>'
+      + '<td>第' + escapeHtml(String(s.teamNo)) + '班</td>'
+      + '<td>' + escapeHtml(s.studentId) + '</td>'
+      + '<td>' + escapeHtml(s.name) + '</td>'
+      + '<td>' + evalCell + '</td>'
+      + '<td>' + ciCell + '</td>'
+      + '<td>' + coCell + '</td>'
+      + '</tr>';
   }).join('');
+
+  const bodyHtml = `
+    <h1>個人一覧</h1>
+    <p class="muted">学生ごとに、チーム代表者による貢献評価と、チェックイン・チェックアウトの内容を1行にまとめています。</p>
+    <div class="card table-wrap">
+      <table>
+        <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
+        <tbody>${rowsHtml || '<tr><td colspan="6" class="muted">学生が登録されていません。</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+
+  writeTabDoc(win, '個人一覧', bodyHtml, '', '');
 }
 
-/* --- 提示モード（新しいタブに掲示板形式で表示） --- */
+/* --- 提示モードタブ（新しいタブの中に掲示板形式で表示） --- */
 
-function updatePresentInfo(){
-  const assignmentId = document.getElementById('presentAssignSel').value;
-  const info = document.getElementById('presentInfo');
-  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
-  if (!a){ info.textContent = ''; return; }
-  const parts = [];
-  if (a.text_prompt) parts.push('テキストの問い：' + a.text_prompt);
-  if (a.file_prompt) parts.push('ファイルの問い：' + a.file_prompt);
-  info.textContent = parts.join(' ／ ') || 'この課題には内容が設定されていません。';
+async function openPresentationMenuTab(){
+  const win = openBlankTab('提示モード');
+  if (!win){ notifyPopupBlocked(); return; }
+  const res = await api('teacherHomeInit', {});
+  if (!res.ok){ reportTabError(win, res.error); return; }
+
+  const info = computeAssignmentLabels(res.assignments || []);
+  const optsHtml = (res.assignments || []).map(a => {
+    const qLabel = info.countByDate[a.date] > 1 ? ('（問' + info.labelOf[a.assignment_id] + '）') : '';
+    const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
+    const label = a.date + qLabel + '：' + preview;
+    return '<option value="' + a.assignment_id + '">' + escapeHtml(label) + '</option>';
+  }).join('');
+
+  const bodyHtml = `
+    <h1>提示モード（学生に見せる画面）</h1>
+    <p class="muted">課題を選んで「表示する」を押すと、下に掲示板形式で提出内容が表示されます。そのままこのタブを投影できます。</p>
+    <div class="card">
+      <label>課題（授業日）</label>
+      <select id="presentAssignSel">${optsHtml}</select>
+      <button class="btn" onclick="loadPresentationBoard()">表示する</button>
+    </div>
+    <div id="presentResult"></div>
+  `;
+
+  const extraScript = `
+    const ASSIGNMENTS = ${embedJson(res.assignments || [])};
+
+    async function loadPresentationBoard(){
+      const assignmentId = document.getElementById('presentAssignSel').value;
+      if (!assignmentId) return;
+      const a = ASSIGNMENTS.find(function(x){ return x.assignment_id === assignmentId; });
+      const res = await api('teacherPresentationList', { assignmentId: assignmentId });
+      const wrap = document.getElementById('presentResult');
+      if (!res.ok){ wrap.innerHTML = '<p style="color:#c00;">' + escapeHtml(res.error) + '</p>'; return; }
+      wrap.innerHTML = buildPresentationBoardHtml(a, res.items);
+      const textBtn = document.getElementById('tab-btn-text');
+      const imageBtn = document.getElementById('tab-btn-image');
+      if (textBtn) textBtn.addEventListener('click', function(){ showBoard('text'); });
+      if (imageBtn) imageBtn.addEventListener('click', function(){ showBoard('image'); });
+    }
+
+    function buildPresentationBoardHtml(a, items){
+      const dateLabel = a ? escapeHtml(a.date) : '';
+      const textPrompt = a && a.text_prompt ? escapeHtml(a.text_prompt) : '';
+      const filePrompt = a && a.file_prompt ? escapeHtml(a.file_prompt) : '';
+      const promptHtml = [
+        textPrompt ? '<div class="prompt-line"><span class="tag">テキストの問い</span>' + textPrompt + '</div>' : '',
+        filePrompt ? '<div class="prompt-line"><span class="tag">ファイルの問い</span>' + filePrompt + '</div>' : ''
+      ].filter(Boolean).join('');
+
+      const textCards = items.map(function(it){
+        if (!it.textContent) return '';
+        const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+          + '<div class="post-text">' + escapeHtml(it.textContent).replace(/\\n/g,'<br>') + '</div></div>';
+      }).filter(Boolean).join('');
+
+      const imageCards = items.map(function(it){
+        if (!it.fileUrl) return '';
+        const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+        const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\\n/g,'<br>') + '</div>' : '';
+        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+          + '<img src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">' + commentHtml + '</div>';
+      }).filter(Boolean).join('');
+
+      const hasText = !!textCards;
+      const hasImage = !!imageCards;
+      const showTabs = hasText && hasImage;
+
+      const textBoardHtml = '<div id="board-text" class="board-wrap"' + (!hasText && hasImage ? ' style="display:none;"' : '') + '>'
+        + (hasText ? '<div class="board">' + textCards + '</div>' : '<p class="empty">この課題にはまだテキストの提出がありません。</p>')
+        + '</div>';
+      const imageBoardHtml = '<div id="board-image" class="board-wrap"' + (hasText ? ' style="display:none;"' : '') + '>'
+        + (hasImage ? '<div class="board">' + imageCards + '</div>' : '<p class="empty">この課題にはまだ画像の提出がありません。</p>')
+        + '</div>';
+
+      const tabsHtml = showTabs
+        ? '<div class="tabbar"><button id="tab-btn-text" type="button" class="tabbtn active">テキスト</button>'
+          + '<button id="tab-btn-image" type="button" class="tabbtn">画像</button></div>'
+        : '';
+
+      return '<div class="prompt-box"><h2 style="margin-top:0;">' + dateLabel + '</h2>' + promptHtml + '</div>'
+        + tabsHtml + textBoardHtml + imageBoardHtml;
+    }
+
+    function showBoard(kind){
+      const bt = document.getElementById('board-text');
+      const bi = document.getElementById('board-image');
+      if (bt) bt.style.display = (kind === 'text') ? 'block' : 'none';
+      if (bi) bi.style.display = (kind === 'image') ? 'block' : 'none';
+      const tt = document.getElementById('tab-btn-text'); if (tt) tt.classList.toggle('active', kind === 'text');
+      const ti = document.getElementById('tab-btn-image'); if (ti) ti.classList.toggle('active', kind === 'image');
+    }
+  `;
+
+  const extraCss = `
+    .prompt-box{background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:20px;}
+    .prompt-line{margin:4px 0;font-size:15px;}
+    .tag{display:inline-block;background:#4a6fa5;color:#fff;font-size:12px;padding:2px 8px;border-radius:4px;margin-right:8px;}
+    .tabbar{display:flex;gap:8px;margin-bottom:20px;}
+    .tabbtn{font-size:15px;font-weight:700;padding:10px 22px;border-radius:8px 8px 0 0;border:1px solid #ccd3dc;border-bottom:none;background:#dfe4ea;color:#556;cursor:pointer;}
+    .tabbtn.active{background:#fffdf6;color:#3a4a63;}
+    .board{column-count:3;column-gap:18px;}
+    @media (max-width:1100px){.board{column-count:2;}}
+    @media (max-width:700px){.board{column-count:1;}}
+    .pcard{break-inside:avoid;background:#fffdf6;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,0.12);border-top:6px solid #f4c542;}
+    .pteam{font-weight:700;font-size:15px;margin-bottom:10px;color:#3a4a63;}
+    .pcard img{max-width:100%;border-radius:6px;display:block;margin-bottom:8px;}
+    .comment{background:#fff6d8;border-radius:6px;padding:8px 10px;font-size:13px;color:#5a4a20;}
+    .post-text{font-size:15px;line-height:1.7;}
+    .empty{color:#888;text-align:center;margin-top:40px;font-size:15px;}
+  `;
+
+  writeTabDoc(win, '提示モード', bodyHtml, extraCss, extraScript);
 }
 
-async function openPresentationTab(){
-  const assignmentId = document.getElementById('presentAssignSel').value;
-  if (!assignmentId){ alert('課題を選択してください。'); return; }
-  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
+/* --- チーム・個人管理タブ（教員によるチーム名・所属チーム変更、氏名/メール編集、パスワード再発行・再設定） --- */
 
-  // ポップアップブロック対策：クリックと同期のタイミングでまず空のタブを開いておく
-  const win = window.open('', '_blank');
-  if (win){
-    win.document.open();
-    win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>読み込み中...</title></head>'
-      + '<body style="font-family:sans-serif;padding:60px;text-align:center;color:#888;">読み込み中...</body></html>');
-    win.document.close();
-  }
+async function openManageTab(){
+  const win = openBlankTab('チーム・個人管理');
+  if (!win){ notifyPopupBlocked(); return; }
+  const res = await api('teacherListTeamsAndMembers', {});
+  if (!res.ok){ reportTabError(win, res.error); return; }
 
-  const res = await api('teacherPresentationList', { assignmentId });
+  const bodyHtml = `
+    <h1>チーム・個人管理</h1>
+    <p class="muted">チーム名の変更、学生の氏名・メール・所属チームの変更、個人パスワードの再発行・再設定ができます。<br>
+    学籍番号は過去の提出・評価・チェックイン記録に紐づいているため、この画面では変更できません。チームパスワードはこの画面では変更されません。</p>
+    <div class="card table-wrap">
+      <h2>チーム一覧</h2>
+      <table>
+        <thead><tr><th>チーム番号</th><th>チーム名</th><th></th><th>状態</th></tr></thead>
+        <tbody id="teamsBody"></tbody>
+      </table>
+    </div>
+    <div class="card table-wrap">
+      <h2>学生一覧</h2>
+      <p class="muted">パスワードは「新しいパスワード」欄を空欄のまま再発行すると8桁の数字が自動生成されます。特定の値に変更したい場合は入力してから実行してください。実行後に表示される新しいパスワードは、その場で学生に伝えてください（この画面を閉じると再表示できません。スプレッドシートのMembersシートでも確認できます）。</p>
+      <table>
+        <thead><tr><th>学籍番号</th><th>氏名</th><th>メール</th><th>所属チーム</th><th></th><th>新しいパスワード（任意）</th><th></th><th>状態</th></tr></thead>
+        <tbody id="membersBody"></tbody>
+      </table>
+    </div>
+  `;
 
-  if (!res.ok){
-    if (win) win.document.body.innerHTML = '<p style="padding:40px;color:#c00;font-family:sans-serif;">' + escapeHtml(res.error) + '</p>';
-    else alert(res.error);
-    return;
-  }
-  if (!win){
-    alert('新しいタブを開けませんでした。ブラウザのポップアップブロックを解除してから、もう一度お試しください。');
-    return;
-  }
-  const html = buildPresentationHtml(a, res.items);
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-}
+  const extraScript = `
+    let TEAMS = ${embedJson(res.teams || [])};
+    let MEMBERS = ${embedJson(res.members || [])};
 
-function buildPresentationHtml(a, items){
-  const dateLabel = a ? escapeHtml(a.date) : '';
-  const textPrompt = a && a.text_prompt ? escapeHtml(a.text_prompt) : '';
-  const filePrompt = a && a.file_prompt ? escapeHtml(a.file_prompt) : '';
-  const promptHtml = [
-    textPrompt ? '<div class="prompt-line"><span class="tag">テキストの問い</span>' + textPrompt + '</div>' : '',
-    filePrompt ? '<div class="prompt-line"><span class="tag">ファイルの問い</span>' + filePrompt + '</div>' : ''
-  ].filter(Boolean).join('');
+    function teamOptionsHtml(selectedTeamNo){
+      return TEAMS.map(function(t){
+        const sel = String(t.teamNo) === String(selectedTeamNo) ? ' selected' : '';
+        return '<option value="' + t.teamNo + '"' + sel + '>第' + t.teamNo + '班 ' + escapeHtml(t.teamName) + '</option>';
+      }).join('');
+    }
 
-  // テキストの投稿と画像の投稿は別々の掲示板として組み立てる（上部のタブで切り替える）
-  const textCards = items.map(it => {
-    if (!it.textContent) return '';
-    const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
-    return '<div class="card"><div class="team">' + team + '</div>'
-      + '<div class="post-text">' + escapeHtml(it.textContent).replace(/\n/g,'<br>') + '</div></div>';
-  }).filter(Boolean).join('');
+    function renderTeamsTable(){
+      const rowsHtml = TEAMS.map(function(t){
+        return '<tr>'
+          + '<td>第' + t.teamNo + '班</td>'
+          + '<td><input class="teamNameInput" value="' + escapeHtml(t.teamName) + '"></td>'
+          + '<td><button class="btn small" data-action="save-team" data-id="' + t.teamNo + '">保存</button></td>'
+          + '<td><div class="msg" id="teamMsg-' + t.teamNo + '"></div></td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('teamsBody').innerHTML = rowsHtml || '<tr><td colspan="4" class="muted">チームが登録されていません。</td></tr>';
+    }
 
-  const imageCards = items.map(it => {
-    if (!it.fileUrl) return '';
-    const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
-    const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\n/g,'<br>') + '</div>' : '';
-    return '<div class="card"><div class="team">' + team + '</div>'
-      + '<img src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">' + commentHtml + '</div>';
-  }).filter(Boolean).join('');
+    function renderMembersTable(){
+      const rowsHtml = MEMBERS.map(function(m){
+        return '<tr>'
+          + '<td>' + escapeHtml(m.studentId) + '</td>'
+          + '<td><input class="memberNameInput" value="' + escapeHtml(m.name) + '"></td>'
+          + '<td><input class="memberEmailInput" value="' + escapeHtml(m.email) + '"></td>'
+          + '<td><select class="memberTeamSelect">' + teamOptionsHtml(m.teamNo) + '</select></td>'
+          + '<td><button class="btn small" data-action="save-member" data-id="' + escapeHtml(m.studentId) + '">保存</button></td>'
+          + '<td><input class="memberPwInput" placeholder="空欄で自動生成"></td>'
+          + '<td><button class="btn small secondary" data-action="reset-password" data-id="' + escapeHtml(m.studentId) + '">再発行/再設定</button></td>'
+          + '<td><div class="msg" id="memberMsg-' + escapeHtml(m.studentId) + '"></div></td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('membersBody').innerHTML = rowsHtml || '<tr><td colspan="8" class="muted">学生が登録されていません。</td></tr>';
+    }
 
-  const hasText = !!textCards;
-  const hasImage = !!imageCards;
-  const showTabs = hasText && hasImage;
+    function updateTeamOptionLabel(teamNo, teamName){
+      document.querySelectorAll('.memberTeamSelect').forEach(function(sel){
+        const opt = sel.querySelector('option[value="' + teamNo + '"]');
+        if (opt) opt.textContent = '第' + teamNo + '班 ' + teamName;
+      });
+    }
 
-  const textBoardHtml = '<div id="board-text" class="board-wrap">'
-    + (hasText ? '<div class="board">' + textCards + '</div>' : '<p class="empty">この課題にはまだテキストの提出がありません。</p>')
-    + '</div>';
-  const imageBoardHtml = '<div id="board-image" class="board-wrap" style="display:none;">'
-    + (hasImage ? '<div class="board">' + imageCards + '</div>' : '<p class="empty">この課題にはまだ画像の提出がありません。</p>')
-    + '</div>';
+    document.getElementById('teamsBody').addEventListener('click', async function(e){
+      const btn = e.target.closest('button[data-action="save-team"]');
+      if (!btn) return;
+      const teamNo = btn.getAttribute('data-id');
+      const tr = btn.closest('tr');
+      const teamName = tr.querySelector('.teamNameInput').value;
+      const msgId = 'teamMsg-' + teamNo;
+      const res = await api('teacherUpdateTeam', { teamNo: teamNo, teamName: teamName });
+      if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+      setMsg(msgId, '保存しました。', 'success');
+      const t = TEAMS.find(function(x){ return String(x.teamNo) === String(teamNo); });
+      if (t) t.teamName = teamName;
+      updateTeamOptionLabel(teamNo, teamName);
+    });
 
-  // 両方の種類の提出がある場合のみ、上部にタブを表示して切り替えられるようにする
-  const tabsHtml = showTabs
-    ? '<div class="tabbar">'
-      + '<button id="tab-btn-text" class="tabbtn active" onclick="showBoard(\'text\')">テキスト</button>'
-      + '<button id="tab-btn-image" class="tabbtn" onclick="showBoard(\'image\')">画像</button>'
-      + '</div>'
-    : '';
+    document.getElementById('membersBody').addEventListener('click', async function(e){
+      const saveBtn = e.target.closest('button[data-action="save-member"]');
+      const pwBtn = e.target.closest('button[data-action="reset-password"]');
+      if (saveBtn){
+        const studentId = saveBtn.getAttribute('data-id');
+        const tr = saveBtn.closest('tr');
+        const name = tr.querySelector('.memberNameInput').value;
+        const email = tr.querySelector('.memberEmailInput').value;
+        const teamNo = tr.querySelector('.memberTeamSelect').value;
+        const msgId = 'memberMsg-' + studentId;
+        const res = await api('teacherUpdateMember', { studentId: studentId, name: name, email: email, teamNo: teamNo });
+        if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+        setMsg(msgId, '保存しました。', 'success');
+        const m = MEMBERS.find(function(x){ return String(x.studentId) === String(studentId); });
+        if (m){ m.name = name; m.email = email; m.teamNo = teamNo; }
+        return;
+      }
+      if (pwBtn){
+        const studentId = pwBtn.getAttribute('data-id');
+        const tr = pwBtn.closest('tr');
+        const pwInput = tr.querySelector('.memberPwInput');
+        const newPassword = pwInput.value;
+        const msgId = 'memberMsg-' + studentId;
+        const sure = confirm('学籍番号 ' + studentId + ' のパスワードを' + (newPassword ? '指定した値に再設定' : '自動生成の値で再発行') + 'します。よろしいですか？');
+        if (!sure) return;
+        const res = await api('teacherResetMemberPassword', { studentId: studentId, newPassword: newPassword });
+        if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+        setMsg(msgId, '新しいパスワード：' + res.newPassword + '（その場で学生に伝えてください。この画面を閉じると再表示できません）', 'success');
+        pwInput.value = '';
+        return;
+      }
+    });
 
-  // どちらか一方しか提出がない場合は、そちらの掲示板だけを最初から表示する
-  const initialScript = (!hasText && hasImage)
-    ? '<script>document.getElementById("board-text").style.display="none";document.getElementById("board-image").style.display="block";</' + 'script>'
-    : '';
+    renderTeamsTable();
+    renderMembersTable();
+  `;
 
-  return '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
-    + '<title>提示モード：' + dateLabel + '</title>'
-    + '<style>'
-    + '*{box-sizing:border-box;}'
-    + 'body{margin:0;padding:28px;background:#eef1f5;font-family:"Hiragino Sans","Yu Gothic",sans-serif;color:#222;}'
-    + 'h1{font-size:22px;margin:0 0 6px;}'
-    + '.prompt-box{background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);}'
-    + '.prompt-line{margin:4px 0;font-size:15px;}'
-    + '.tag{display:inline-block;background:#4a6fa5;color:#fff;font-size:12px;padding:2px 8px;border-radius:4px;margin-right:8px;}'
-    + '.tabbar{display:flex;gap:8px;margin-bottom:20px;}'
-    + '.tabbtn{font-size:15px;font-weight:700;padding:10px 22px;border-radius:8px 8px 0 0;border:1px solid #ccd3dc;'
-    + 'border-bottom:none;background:#dfe4ea;color:#556;cursor:pointer;}'
-    + '.tabbtn.active{background:#fffdf6;color:#3a4a63;box-shadow:0 -2px 6px rgba(0,0,0,0.06);}'
-    + '.board{column-count:3;column-gap:18px;}'
-    + '@media (max-width:1100px){.board{column-count:2;}}'
-    + '@media (max-width:700px){.board{column-count:1;}}'
-    + '.card{break-inside:avoid;background:#fffdf6;border-radius:10px;padding:16px;margin-bottom:18px;'
-    + 'box-shadow:0 2px 8px rgba(0,0,0,0.12);border-top:6px solid #f4c542;}'
-    + '.team{font-weight:700;font-size:15px;margin-bottom:10px;color:#3a4a63;}'
-    + '.card img{max-width:100%;border-radius:6px;display:block;margin-bottom:8px;}'
-    + '.comment{background:#fff6d8;border-radius:6px;padding:8px 10px;font-size:13px;color:#5a4a20;}'
-    + '.post-text{font-size:15px;line-height:1.7;}'
-    + '.empty{color:#888;text-align:center;margin-top:60px;font-size:15px;}'
-    + '</style></head><body>'
-    + '<h1>提示モード：' + dateLabel + '</h1>'
-    + (promptHtml ? '<div class="prompt-box">' + promptHtml + '</div>' : '')
-    + tabsHtml
-    + textBoardHtml
-    + imageBoardHtml
-    + initialScript
-    + '<script>'
-    + 'function showBoard(kind){'
-    + 'document.getElementById("board-text").style.display = (kind==="text") ? "block" : "none";'
-    + 'document.getElementById("board-image").style.display = (kind==="image") ? "block" : "none";'
-    + 'var tt=document.getElementById("tab-btn-text"); if(tt) tt.classList.toggle("active", kind==="text");'
-    + 'var ti=document.getElementById("tab-btn-image"); if(ti) ti.classList.toggle("active", kind==="image");'
-    + '}'
-    + '</' + 'script>'
-    + '</body></html>';
+  writeTabDoc(win, 'チーム・個人管理', bodyHtml, '', extraScript);
 }
 
 /* ---------------- 初期表示 ---------------- */
-document.getElementById('assignDate').value = todayIso();
 showView('view-home');
 </script>
 </body>
