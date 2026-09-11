@@ -67,6 +67,8 @@
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th,td{border:1px solid var(--border); padding:7px 8px; text-align:left; vertical-align:top;}
   th{background:#f0f2f5;}
+  .open-mode-choice{display:flex; gap:20px; flex-wrap:wrap; margin:6px 0 4px; font-size:13px; color:var(--text);}
+  .open-mode-choice label{display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:400;}
   .teacher-menu{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:10px;}
   .menu-btn{
     background:#fff; border:1px solid var(--border); border-radius:10px; padding:18px 16px;
@@ -75,6 +77,10 @@
   }
   .menu-btn:hover{border-color:var(--accent); box-shadow:0 2px 8px rgba(0,0,0,0.1);}
   .menu-sub{display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:6px;}
+  .inline-panel{background:#fff; border:1px solid var(--border); border-radius:10px; margin-top:16px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+  .inline-panel-head{display:flex; justify-content:space-between; align-items:center; gap:10px; background:#eef1f5; padding:10px 16px; font-size:14px;}
+  .inline-panel-close{background:none; border:1px solid var(--border); border-radius:6px; color:#c0392b; cursor:pointer; font-size:12px; padding:4px 10px;}
+  .inline-panel-frame{display:block; width:100%; height:80vh; border:none;}
   .member-row{border:1px dashed var(--border); border-radius:8px; padding:12px; margin-bottom:10px;}
   .muted{color:var(--muted); font-size:13px; white-space:pre-wrap;}
   .kv{display:flex; justify-content:space-between; font-size:13px; margin:4px 0;}
@@ -281,11 +287,21 @@
   <section id="view-teacher-home" class="view hidden">
     <div class="card">
       <h2 id="teacherHomeTitle"></h2>
-      <p class="muted">メニューを選ぶと、新しいタブでその画面が開きます（他の情報に邪魔されず、集中して確認・操作できます）。</p>
+      <p class="muted">メニューを選ぶと、下で選んだ開き方でその画面が表示されます。</p>
+      <div class="open-mode-choice">
+        <label><input type="radio" name="teacherOpenMode" id="teacherModeTab" value="tab" checked> 新しいタブで開く</label>
+        <label><input type="radio" name="teacherOpenMode" id="teacherModeInline" value="inline"> このページに追加表示する</label>
+      </div>
       <div class="teacher-menu">
+        <button class="menu-btn" onclick="openAssignmentTab()">課題管理<span class="menu-sub">授業日ごとの問い（テキスト・ファイル）の登録・編集・削除</span></button>
+        <button class="menu-btn" onclick="openReviewTab()">提出された課題を確認して評価する<span class="menu-sub">提出内容の確認、S/A/B/C/D評価とコメントの入力</span></button>
+        <button class="menu-btn" onclick="openOverviewTab()">全体一覧<span class="menu-sub">チーム×課題の提出・評価状況の一覧表</span></button>
+        <button class="menu-btn" onclick="openIndividualTab()">個人ごとの成績を閲覧する<span class="menu-sub">学生を選んで貢献評価・チェックイン/チェックアウトを確認</span></button>
+        <button class="menu-btn" onclick="openPresentationMenuTab()">提示モード<span class="menu-sub">学生に見せる掲示板形式の画面</span></button>
         <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名/メールの編集、パスワードの再発行・再設定</span></button>
       </div>
     </div>
+    <div id="teacherInlinePanels"></div>
   </section>
 
 </main>
@@ -887,6 +903,61 @@ function notifyPopupBlocked(){
   alert('新しいタブを開けませんでした。ブラウザのポップアップブロックを解除してから、もう一度お試しください。');
 }
 
+// 教員メニューの「開き方」選択（新しいタブ／このページに追加表示）を読み取る
+function getTeacherOpenMode(){
+  const el = document.getElementById('teacherModeInline');
+  return (el && el.checked) ? 'inline' : 'tab';
+}
+
+// 現在選ばれている開き方に応じて、新しいタブ or ページ内パネルのどちらかを用意して返す。
+// 戻り値は window.open() が返すウィンドウと同じように .document を持つオブジェクト
+// （新しいタブの場合は本物のウィンドウ、ページ内表示の場合はiframeのcontentWindow）。
+function openTarget(title){
+  return (getTeacherOpenMode() === 'inline') ? openInlinePanel(title) : openBlankTab(title);
+}
+
+// このページの中に、閉じるボタン付きのパネル（iframe）を追加して表示する。
+// iframeの中は新しいタブと同じ自己完結したHTMLドキュメントとして書き込まれるため、
+// ページ本体のCSS/JSとは完全に独立しており、スタイルの衝突が起きない。
+function openInlinePanel(title){
+  const container = document.getElementById('teacherInlinePanels');
+  if (!container) return null;
+
+  const panel = document.createElement('div');
+  panel.className = 'inline-panel';
+
+  const head = document.createElement('div');
+  head.className = 'inline-panel-head';
+
+  const titleEl = document.createElement('strong');
+  titleEl.textContent = title;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'inline-panel-close';
+  closeBtn.textContent = '✕ 閉じる';
+  closeBtn.addEventListener('click', function(){ panel.remove(); });
+
+  head.appendChild(titleEl);
+  head.appendChild(closeBtn);
+
+  const iframe = document.createElement('iframe');
+  iframe.className = 'inline-panel-frame';
+
+  panel.appendChild(head);
+  panel.appendChild(iframe);
+  container.insertBefore(panel, container.firstChild);
+
+  const win = iframe.contentWindow;
+  win.document.open();
+  win.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title></head>'
+    + '<body style="font-family:sans-serif;padding:40px;text-align:center;color:#888;">読み込み中...</body></html>');
+  win.document.close();
+
+  if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return win;
+}
+
 function writeTabDoc(win, title, bodyHtml, extraCss, extraScript){
   if (!win) return;
   const html = '<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title>'
@@ -913,7 +984,7 @@ function reportTabError(win, error){
 /* --- 課題管理タブ --- */
 
 async function openAssignmentTab(){
-  const win = openBlankTab('課題管理');
+  const win = openTarget('課題管理');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherHomeInit', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1037,7 +1108,7 @@ async function openAssignmentTab(){
 /* --- 提出された課題を確認して評価するタブ --- */
 
 async function openReviewTab(){
-  const win = openBlankTab('提出された課題を確認して評価する');
+  const win = openTarget('提出された課題を確認して評価する');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherHomeInit', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1146,7 +1217,7 @@ async function openReviewTab(){
 /* --- 全体一覧タブ（表示専用のため、この場で静的なHTMLとして組み立てる） --- */
 
 async function openOverviewTab(){
-  const win = openBlankTab('全体一覧');
+  const win = openTarget('全体一覧');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherOverview', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1199,7 +1270,7 @@ async function openOverviewTab(){
 /* --- 個人ごとの成績を閲覧するタブ（プルダウンで学生を選んで1人ずつ表示） --- */
 
 async function openIndividualTab(){
-  const win = openBlankTab('個人ごとの成績を閲覧する');
+  const win = openTarget('個人ごとの成績を閲覧する');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherIndividualOverview', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1212,16 +1283,63 @@ async function openIndividualTab(){
 
   const bodyHtml = `
     <h1>個人ごとの成績を閲覧する</h1>
-    <p class="muted">学生を選ぶと、チーム代表者による貢献評価と、チェックイン・チェックアウトの内容を確認できます。</p>
-    <div class="card">
-      <label>学生を選択</label>
-      <select id="individualSel"></select>
+    <p class="muted">基本は全員を一覧表示します。「個人別に見る」タブに切り替えると、学生を1人選んでその人だけのデータを確認できます。</p>
+    <div class="tabbar">
+      <button id="tab-btn-all" type="button" class="tabbtn active">全員一覧</button>
+      <button id="tab-btn-one" type="button" class="tabbtn">個人別に見る</button>
     </div>
-    <div id="individualResult"></div>
+    <div id="board-all" class="board-wrap">
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
+          <tbody id="allStudentsBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="board-one" class="board-wrap" style="display:none;">
+      <div class="card">
+        <label>学生を選択</label>
+        <select id="individualSel"></select>
+      </div>
+      <div id="individualResult"></div>
+    </div>
   `;
 
   const extraScript = `
     const STUDENTS = ${embedJson(students)};
+
+    function scoreLabel(s){
+      const total = (s.scoreTotal != null) ? s.scoreTotal : 0;
+      const max = (s.scoreMax != null) ? s.scoreMax : 0;
+      return total + ' / ' + max + '点';
+    }
+
+    function renderAllStudents(){
+      const rowsHtml = STUDENTS.map(function(s){
+        const evalCell = (s.peerEvals || []).map(function(e){
+          return '<div>' + escapeHtml(e.date || '') + '：' + escapeHtml(e.contributionText) + '（' + escapeHtml(String(e.score)) + '点）</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        const ciCell = (s.checkins || []).map(function(c){
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        const coCell = (s.checkouts || []).map(function(c){
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        return '<tr>'
+          + '<td>第' + escapeHtml(String(s.teamNo)) + '班</td>'
+          + '<td>' + escapeHtml(s.studentId) + '</td>'
+          + '<td>' + escapeHtml(s.name) + '</td>'
+          + '<td>' + evalCell + '</td>'
+          + '<td>' + escapeHtml(scoreLabel(s)) + '</td>'
+          + '<td>' + ciCell + '</td>'
+          + '<td>' + coCell + '</td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('allStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="7" class="muted">学生が登録されていません。</td></tr>';
+    }
 
     function studentOptionsHtml(){
       return STUDENTS.map(function(s){
@@ -1238,8 +1356,6 @@ async function openIndividualTab(){
       const evalRowsHtml = (s.peerEvals || []).map(function(e){
         return '<tr><td>' + escapeHtml(e.date || '') + '</td><td>' + escapeHtml(e.contributionText) + '</td><td>' + escapeHtml(String(e.score)) + '</td></tr>';
       }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
-      const scoreTotal = (s.scoreTotal != null) ? s.scoreTotal : 0;
-      const scoreMax = (s.scoreMax != null) ? s.scoreMax : 0;
 
       const ciRowsHtml = (s.checkins || []).map(function(c){
         return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.goalText) + '</td></tr>';
@@ -1250,7 +1366,7 @@ async function openIndividualTab(){
       }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
 
       wrap.innerHTML = '<div class="card table-wrap"><h2>第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</h2>'
-        + '<h3>チーム代表者による貢献評価（授業日ごとに1回）　累積：' + scoreTotal + ' / ' + scoreMax + '点</h3>'
+        + '<h3>チーム代表者による貢献評価（授業日ごとに1回）　累積：' + escapeHtml(scoreLabel(s)) + '</h3>'
         + '<table><thead><tr><th>日付</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>' + evalRowsHtml + '</tbody></table>'
         + '<h3>チェックイン</h3>'
         + '<table><thead><tr><th>日付</th><th>時刻</th><th>今日意識したいこと</th></tr></thead><tbody>' + ciRowsHtml + '</tbody></table>'
@@ -1259,18 +1375,37 @@ async function openIndividualTab(){
         + '</div>';
     }
 
+    function showBoard(kind){
+      const ba = document.getElementById('board-all');
+      const bo = document.getElementById('board-one');
+      if (ba) ba.style.display = (kind === 'all') ? 'block' : 'none';
+      if (bo) bo.style.display = (kind === 'one') ? 'block' : 'none';
+      const ta = document.getElementById('tab-btn-all'); if (ta) ta.classList.toggle('active', kind === 'all');
+      const to = document.getElementById('tab-btn-one'); if (to) to.classList.toggle('active', kind === 'one');
+    }
+    document.getElementById('tab-btn-all').addEventListener('click', function(){ showBoard('all'); });
+    document.getElementById('tab-btn-one').addEventListener('click', function(){ showBoard('one'); });
+
     document.getElementById('individualSel').innerHTML = studentOptionsHtml();
     document.getElementById('individualSel').addEventListener('change', renderIndividual);
+
+    renderAllStudents();
     renderIndividual();
   `;
 
-  writeTabDoc(win, '個人ごとの成績を閲覧する', bodyHtml, '', extraScript);
+  const extraCss = `
+    .tabbar{display:flex;gap:8px;margin-bottom:20px;}
+    .tabbtn{font-size:15px;font-weight:700;padding:10px 22px;border-radius:8px 8px 0 0;border:1px solid #dde1e6;border-bottom:none;background:#eef1f5;color:#556;cursor:pointer;}
+    .tabbtn.active{background:#fff;color:#1f2430;}
+  `;
+
+  writeTabDoc(win, '個人ごとの成績を閲覧する', bodyHtml, extraCss, extraScript);
 }
 
 /* --- 提示モードタブ（新しいタブの中に掲示板形式で表示） --- */
 
 async function openPresentationMenuTab(){
-  const win = openBlankTab('提示モード');
+  const win = openTarget('提示モード');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherHomeInit', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1389,7 +1524,7 @@ async function openPresentationMenuTab(){
 /* --- チーム・個人管理タブ（教員によるチーム名・所属チーム変更、氏名/メール編集、パスワード再発行・再設定） --- */
 
 async function openManageTab(){
-  const win = openBlankTab('チーム・個人管理');
+  const win = openTarget('チーム・個人管理');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherListTeamsAndMembers', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
