@@ -283,11 +283,6 @@
       <h2 id="teacherHomeTitle"></h2>
       <p class="muted">メニューを選ぶと、新しいタブでその画面が開きます（他の情報に邪魔されず、集中して確認・操作できます）。</p>
       <div class="teacher-menu">
-        <button class="menu-btn" onclick="openAssignmentTab()">課題管理<span class="menu-sub">授業日ごとの問い（テキスト・ファイル）の登録・編集・削除</span></button>
-        <button class="menu-btn" onclick="openReviewTab()">チーム別確認・評価<span class="menu-sub">提出内容の確認、S/A/B/C/D評価とコメントの入力</span></button>
-        <button class="menu-btn" onclick="openOverviewTab()">全体一覧<span class="menu-sub">チーム×課題の提出・評価状況の一覧表</span></button>
-        <button class="menu-btn" onclick="openIndividualTab()">個人一覧<span class="menu-sub">学生ごとの貢献評価・チェックイン/チェックアウト一覧表</span></button>
-        <button class="menu-btn" onclick="openPresentationMenuTab()">提示モード<span class="menu-sub">学生に見せる掲示板形式の画面</span></button>
         <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名/メールの編集、パスワードの再発行・再設定</span></button>
       </div>
     </div>
@@ -750,9 +745,11 @@ function shortTs(ts){
 
 /* =========================================================
    教員メニュー
-   各機能（課題管理／チーム別確認・評価／全体一覧／個人一覧／提示モード）は、
-   それぞれ独立した新しいタブ（自己完結したHTMLドキュメント）として開く。
+   各機能は、それぞれ独立した新しいタブ（自己完結したHTMLドキュメント）として開く。
    タブ同士は状態を共有せず、開くたびに最新データをサーバーから取得する。
+   （課題管理／提出された課題を確認して評価する／全体一覧／個人ごとの成績を閲覧する／提示モードは、
+   現在は教員メニューのボタンからは開けない状態になっている。関数自体は下記に残しているため、
+   必要になれば教員メニューにボタンを追加すればすぐに再度呼び出せる。）
    ========================================================= */
 
 const TAB_LOADING_HTML = '<div id="loadingIndicator" class="loading-indicator" hidden><div class="loading-box"><div class="loading-spinner"></div><div>通信中...</div></div></div>';
@@ -1037,16 +1034,16 @@ async function openAssignmentTab(){
   writeTabDoc(win, '課題管理', bodyHtml, '', extraScript);
 }
 
-/* --- チーム別確認・評価タブ --- */
+/* --- 提出された課題を確認して評価するタブ --- */
 
 async function openReviewTab(){
-  const win = openBlankTab('チーム別確認・評価');
+  const win = openBlankTab('提出された課題を確認して評価する');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherHomeInit', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
 
   const bodyHtml = `
-    <h1>チーム別 確認・評価</h1>
+    <h1>提出された課題を確認して評価する</h1>
     <div class="card">
       <div class="row">
         <div>
@@ -1143,7 +1140,7 @@ async function openReviewTab(){
     renderSelects();
   `;
 
-  writeTabDoc(win, 'チーム別確認・評価', bodyHtml, '', extraScript);
+  writeTabDoc(win, '提出された課題を確認して評価する', bodyHtml, '', extraScript);
 }
 
 /* --- 全体一覧タブ（表示専用のため、この場で静的なHTMLとして組み立てる） --- */
@@ -1199,10 +1196,10 @@ async function openOverviewTab(){
   writeTabDoc(win, '全体一覧', bodyHtml, '', '');
 }
 
-/* --- 個人一覧タブ（すべての個人を並べた1枚の大きな表） --- */
+/* --- 個人ごとの成績を閲覧するタブ（プルダウンで学生を選んで1人ずつ表示） --- */
 
 async function openIndividualTab(){
-  const win = openBlankTab('個人一覧');
+  const win = openBlankTab('個人ごとの成績を閲覧する');
   if (!win){ notifyPopupBlocked(); return; }
   const res = await api('teacherIndividualOverview', {});
   if (!res.ok){ reportTabError(win, res.error); return; }
@@ -1213,42 +1210,59 @@ async function openIndividualTab(){
     return String(a.studentId) < String(b.studentId) ? -1 : (String(a.studentId) > String(b.studentId) ? 1 : 0);
   });
 
-  const rowsHtml = students.map(s => {
-    const evalCell = (s.peerEvals || []).map(e =>
-      '<div>' + escapeHtml(e.date || '') + (e.questionLabel ? '（' + escapeHtml(e.questionLabel).slice(0,20) + '）' : '')
-      + '：' + escapeHtml(e.contributionText) + '（' + escapeHtml(String(e.score)) + '点）</div>'
-    ).join('') || '<span class="muted">記録なし</span>';
-
-    const ciCell = (s.checkins || []).map(c =>
-      '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>'
-    ).join('') || '<span class="muted">記録なし</span>';
-
-    const coCell = (s.checkouts || []).map(c =>
-      '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>'
-    ).join('') || '<span class="muted">記録なし</span>';
-
-    return '<tr>'
-      + '<td>第' + escapeHtml(String(s.teamNo)) + '班</td>'
-      + '<td>' + escapeHtml(s.studentId) + '</td>'
-      + '<td>' + escapeHtml(s.name) + '</td>'
-      + '<td>' + evalCell + '</td>'
-      + '<td>' + ciCell + '</td>'
-      + '<td>' + coCell + '</td>'
-      + '</tr>';
-  }).join('');
-
   const bodyHtml = `
-    <h1>個人一覧</h1>
-    <p class="muted">学生ごとに、チーム代表者による貢献評価と、チェックイン・チェックアウトの内容を1行にまとめています。</p>
-    <div class="card table-wrap">
-      <table>
-        <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
-        <tbody>${rowsHtml || '<tr><td colspan="6" class="muted">学生が登録されていません。</td></tr>'}</tbody>
-      </table>
+    <h1>個人ごとの成績を閲覧する</h1>
+    <p class="muted">学生を選ぶと、チーム代表者による貢献評価と、チェックイン・チェックアウトの内容を確認できます。</p>
+    <div class="card">
+      <label>学生を選択</label>
+      <select id="individualSel"></select>
     </div>
+    <div id="individualResult"></div>
   `;
 
-  writeTabDoc(win, '個人一覧', bodyHtml, '', '');
+  const extraScript = `
+    const STUDENTS = ${embedJson(students)};
+
+    function studentOptionsHtml(){
+      return STUDENTS.map(function(s){
+        return '<option value="' + escapeHtml(s.studentId) + '">第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</option>';
+      }).join('');
+    }
+
+    function renderIndividual(){
+      const studentId = document.getElementById('individualSel').value;
+      const s = STUDENTS.find(function(x){ return String(x.studentId) === String(studentId); });
+      const wrap = document.getElementById('individualResult');
+      if (!s){ wrap.innerHTML = ''; return; }
+
+      const evalRowsHtml = (s.peerEvals || []).map(function(e){
+        return '<tr><td>' + escapeHtml(e.date || '') + '</td><td>' + escapeHtml(e.questionLabel || '') + '</td><td>' + escapeHtml(e.contributionText) + '</td><td>' + escapeHtml(String(e.score)) + '</td></tr>';
+      }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
+
+      const ciRowsHtml = (s.checkins || []).map(function(c){
+        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.goalText) + '</td></tr>';
+      }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
+
+      const coRowsHtml = (s.checkouts || []).map(function(c){
+        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.contributionText) + '</td><td>' + escapeHtml(c.prepText) + '</td></tr>';
+      }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
+
+      wrap.innerHTML = '<div class="card table-wrap"><h2>第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</h2>'
+        + '<h3>チーム代表者による貢献評価</h3>'
+        + '<table><thead><tr><th>日付</th><th>問い</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>' + evalRowsHtml + '</tbody></table>'
+        + '<h3>チェックイン</h3>'
+        + '<table><thead><tr><th>日付</th><th>時刻</th><th>今日意識したいこと</th></tr></thead><tbody>' + ciRowsHtml + '</tbody></table>'
+        + '<h3>チェックアウト</h3>'
+        + '<table><thead><tr><th>日付</th><th>時刻</th><th>貢献できたこと</th><th>次回への準備</th></tr></thead><tbody>' + coRowsHtml + '</tbody></table>'
+        + '</div>';
+    }
+
+    document.getElementById('individualSel').innerHTML = studentOptionsHtml();
+    document.getElementById('individualSel').addEventListener('change', renderIndividual);
+    renderIndividual();
+  `;
+
+  writeTabDoc(win, '個人ごとの成績を閲覧する', bodyHtml, '', extraScript);
 }
 
 /* --- 提示モードタブ（新しいタブの中に掲示板形式で表示） --- */
