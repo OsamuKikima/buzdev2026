@@ -1283,10 +1283,11 @@ async function openIndividualTab(){
 
   const bodyHtml = `
     <h1>個人ごとの成績を閲覧する</h1>
-    <p class="muted">基本は全員を一覧表示します。「個人別に見る」タブに切り替えると、学生を1人選んでその人だけのデータを確認できます。</p>
+    <p class="muted">基本は全員を一覧表示します。「個人別に見る」タブで学生を1人選んで詳しく確認したり、「チーム別に見る」タブでチームを選んでそのチームに所属する学生だけをまとめて確認したりできます。</p>
     <div class="tabbar">
       <button id="tab-btn-all" type="button" class="tabbtn active">全員一覧</button>
       <button id="tab-btn-one" type="button" class="tabbtn">個人別に見る</button>
+      <button id="tab-btn-team" type="button" class="tabbtn">チーム別に見る</button>
     </div>
     <div id="board-all" class="board-wrap">
       <div class="card table-wrap">
@@ -1303,10 +1304,23 @@ async function openIndividualTab(){
       </div>
       <div id="individualResult"></div>
     </div>
+    <div id="board-team" class="board-wrap" style="display:none;">
+      <div class="card">
+        <label>チームを選択</label>
+        <select id="teamSel"></select>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
+          <tbody id="teamStudentsBody"></tbody>
+        </table>
+      </div>
+    </div>
   `;
 
   const extraScript = `
     const STUDENTS = ${embedJson(students)};
+    const TEAMS = ${embedJson(res.teams || [])};
 
     function scoreLabel(s){
       const total = (s.scoreTotal != null) ? s.scoreTotal : 0;
@@ -1347,6 +1361,39 @@ async function openIndividualTab(){
       }).join('');
     }
 
+    function teamOptionsHtml(){
+      return TEAMS.map(function(t){
+        return '<option value="' + t.teamNo + '">第' + t.teamNo + '班　' + escapeHtml(t.teamName) + '</option>';
+      }).join('');
+    }
+
+    function renderTeamStudents(){
+      const teamNo = document.getElementById('teamSel').value;
+      const rowsHtml = STUDENTS.filter(function(s){ return String(s.teamNo) === String(teamNo); }).map(function(s){
+        const evalCell = (s.peerEvals || []).map(function(e){
+          return '<div>' + escapeHtml(e.date || '') + '：' + escapeHtml(e.contributionText) + '（' + escapeHtml(String(e.score)) + '点）</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        const ciCell = (s.checkins || []).map(function(c){
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        const coCell = (s.checkouts || []).map(function(c){
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
+        return '<tr>'
+          + '<td>' + escapeHtml(s.studentId) + '</td>'
+          + '<td>' + escapeHtml(s.name) + '</td>'
+          + '<td>' + evalCell + '</td>'
+          + '<td>' + escapeHtml(scoreLabel(s)) + '</td>'
+          + '<td>' + ciCell + '</td>'
+          + '<td>' + coCell + '</td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('teamStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="6" class="muted">このチームに所属する学生が登録されていません。</td></tr>';
+    }
+
     function renderIndividual(){
       const studentId = document.getElementById('individualSel').value;
       const s = STUDENTS.find(function(x){ return String(x.studentId) === String(studentId); });
@@ -1378,19 +1425,27 @@ async function openIndividualTab(){
     function showBoard(kind){
       const ba = document.getElementById('board-all');
       const bo = document.getElementById('board-one');
+      const bt = document.getElementById('board-team');
       if (ba) ba.style.display = (kind === 'all') ? 'block' : 'none';
       if (bo) bo.style.display = (kind === 'one') ? 'block' : 'none';
+      if (bt) bt.style.display = (kind === 'team') ? 'block' : 'none';
       const ta = document.getElementById('tab-btn-all'); if (ta) ta.classList.toggle('active', kind === 'all');
       const to = document.getElementById('tab-btn-one'); if (to) to.classList.toggle('active', kind === 'one');
+      const tt = document.getElementById('tab-btn-team'); if (tt) tt.classList.toggle('active', kind === 'team');
     }
     document.getElementById('tab-btn-all').addEventListener('click', function(){ showBoard('all'); });
     document.getElementById('tab-btn-one').addEventListener('click', function(){ showBoard('one'); });
+    document.getElementById('tab-btn-team').addEventListener('click', function(){ showBoard('team'); });
 
     document.getElementById('individualSel').innerHTML = studentOptionsHtml();
     document.getElementById('individualSel').addEventListener('change', renderIndividual);
 
+    document.getElementById('teamSel').innerHTML = teamOptionsHtml();
+    document.getElementById('teamSel').addEventListener('change', renderTeamStudents);
+
     renderAllStudents();
     renderIndividual();
+    renderTeamStudents();
   `;
 
   const extraCss = `
