@@ -210,7 +210,7 @@
       <p class="muted">各メンバーの貢献内容と貢献度（10点満点）を入力してください。</p>
       <div id="taPeerEvals"></div>
 
-      <button class="btn" onclick="submitAssignmentForm()">提出する</button>
+      <button class="btn" id="taSubmitBtn" onclick="submitAssignmentForm()">提出する</button>
     </div>
   </section>
 
@@ -237,14 +237,14 @@
 
       <h3>チェックイン：今日の授業コマで意識したいこと（目標）</h3>
       <textarea id="checkinText"></textarea>
-      <button class="btn" onclick="submitCheckin()">チェックインを送信</button>
+      <button class="btn" id="checkinBtn" onclick="submitCheckin()">チェックインを送信</button>
       <p class="muted" id="checkinStatus"></p>
 
       <h3>チェックアウト：自分がチームに貢献できたこと</h3>
       <textarea id="checkoutContrib"></textarea>
       <h3 style="margin-top:10px;">次回の授業に向けて準備すること</h3>
       <textarea id="checkoutPrep"></textarea>
-      <button class="btn" onclick="submitCheckout()">チェックアウトを送信</button>
+      <button class="btn" id="checkoutBtn" onclick="submitCheckout()">チェックアウトを送信</button>
       <p class="muted" id="checkoutStatus"></p>
     </div>
 
@@ -557,6 +557,7 @@ function openTeamAssignment(idx){
   document.getElementById('taFile').value = '';
   document.getElementById('taExistingImg').innerHTML = (a.submission && a.submission.fileUrl)
     ? '<p class="muted">現在の添付画像：</p><img class="thumb" src="' + a.submission.fileUrl + '">' : '';
+  document.getElementById('taSubmitBtn').textContent = a.submitted ? '更新する' : '提出する';
 
   const members = session.members || [];
   const peerEvals = a.peerEvals || [];
@@ -600,10 +601,13 @@ async function submitAssignmentForm(){
     payload.fileName = fileInput.files[0].name;
   }
 
+  const wasSubmitted = a.submitted;
   setMsg('taMsg','送信中...', 'success');
   const res = await api('submitAssignment', payload);
   if (!res.ok){ setMsg('taMsg', res.error); return; }
-  setMsg('taMsg','提出しました。', 'success');
+  setMsg('taMsg', wasSubmitted ? '更新しました。' : '提出しました。', 'success');
+  document.getElementById('taSubmitBtn').textContent = '更新する';
+  document.getElementById('taPastNotice').style.display = 'block';
   await loadTeamAssignments();
 }
 
@@ -629,16 +633,20 @@ async function loadStudentToday(){
   if (!res.ok) return;
   if (res.checkin){
     document.getElementById('checkinText').value = res.checkin.goal_text;
-    document.getElementById('checkinStatus').textContent = '本日 ' + res.checkin.timestamp + ' にチェックイン済み（再送信で上書きされます）';
+    document.getElementById('checkinStatus').textContent = '本日 ' + res.checkin.timestamp + ' にチェックイン済み';
+    document.getElementById('checkinBtn').textContent = 'チェックインを更新';
   } else {
     document.getElementById('checkinStatus').textContent = '本日はまだチェックインしていません。';
+    document.getElementById('checkinBtn').textContent = 'チェックインを送信';
   }
   if (res.checkout){
     document.getElementById('checkoutContrib').value = res.checkout.contribution_text;
     document.getElementById('checkoutPrep').value = res.checkout.prep_text;
-    document.getElementById('checkoutStatus').textContent = '本日 ' + res.checkout.timestamp + ' にチェックアウト済み（再送信で上書きされます）';
+    document.getElementById('checkoutStatus').textContent = '本日 ' + res.checkout.timestamp + ' にチェックアウト済み';
+    document.getElementById('checkoutBtn').textContent = 'チェックアウトを更新';
   } else {
     document.getElementById('checkoutStatus').textContent = '本日はまだチェックアウトしていません。';
+    document.getElementById('checkoutBtn').textContent = 'チェックアウトを送信';
   }
 }
 
@@ -700,7 +708,11 @@ function applyTeacherHomeInit(assignments, teams){
       <td>${escapeHtml(a.date)}</td>
       <td>${escapeHtml(a.text_prompt)}</td>
       <td>${escapeHtml(a.file_prompt)}</td>
-      <td><button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button></td>
+      <td>
+        <button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button>
+        &nbsp;|&nbsp;
+        <button class="link-btn" style="color:var(--danger);" onclick="deleteTeacherAssignment('${a.assignment_id}')">削除</button>
+      </td>
     </tr>`).join('');
   // チーム別確認・評価タブ／提示モードタブのセレクト
   const opts = assignments.map(a => `<option value="${a.assignment_id}">${escapeHtml(a.date)}</option>`).join('');
@@ -745,6 +757,15 @@ function editAssignment(date, textPrompt, filePrompt){
   document.getElementById('assignTextPrompt').value = decodeURIComponent(textPrompt);
   document.getElementById('assignFilePrompt').value = decodeURIComponent(filePrompt);
   window.scrollTo(0,0);
+}
+
+async function deleteTeacherAssignment(assignmentId){
+  const sure = confirm('この課題（' + assignmentId + '）を削除しますか？\n削除すると学生側の一覧からも表示されなくなります（提出済みの内容自体はスプレッドシートに残ります）。');
+  if (!sure) return;
+  const res = await api('teacherDeleteAssignment', { assignmentId });
+  if (!res.ok){ setMsg('assignMsg', res.error); return; }
+  setMsg('assignMsg','削除しました。', 'success');
+  await refreshTeacherHome();
 }
 
 /* --- チーム別確認・評価 --- */
