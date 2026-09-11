@@ -717,8 +717,8 @@ async function loadStudentHistory(){
   dates.forEach(d => {
     const ci = res.checkins.find(c=>c.date===d);
     const co = res.checkouts.find(c=>c.date===d);
-    html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+escapeHtml(ci?ci.timestamp:'')+'</td><td>'+
-      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td><td>'+escapeHtml(co?co.timestamp:'')+'</td></tr>';
+    html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+escapeHtml(ci?timeOnly(ci.timestamp):'')+'</td><td>'+
+      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td><td>'+escapeHtml(co?timeOnly(co.timestamp):'')+'</td></tr>';
   });
   html += '</tbody></table>';
   el.innerHTML = html;
@@ -757,6 +757,15 @@ function shortTs(ts){
   if (!ts) return '';
   const m = String(ts).match(/^\d{4}-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   return m ? (m[1]+'/'+m[2]+' '+m[3]+':'+m[4]) : String(ts);
+}
+
+// タイムスタンプ（"yyyy-MM-dd HH:mm:ss"）から時刻部分だけを取り出す。
+// 日付は別のカラム・別の場所ですでに表示されているケースで、日付の二重表示を避けるために使う。
+function timeOnly(ts){
+  if (!ts) return '';
+  const s = String(ts);
+  const spaceIdx = s.indexOf(' ');
+  return spaceIdx === -1 ? s : s.slice(spaceIdx + 1);
 }
 
 /* =========================================================
@@ -1340,6 +1349,15 @@ async function openIndividualTab(){
       return total + ' / ' + max + '点';
     }
 
+    // タイムスタンプ（"yyyy-MM-dd HH:mm:ss"）から時刻部分だけを取り出す。
+    // 日付はすでに別の場所に表示しているため、日付の二重表示を避けるために使う。
+    function timeOnly(ts){
+      if (!ts) return '';
+      const s = String(ts);
+      const spaceIdx = s.indexOf(' ');
+      return spaceIdx === -1 ? s : s.slice(spaceIdx + 1);
+    }
+
     function renderAllStudents(){
       const rowsHtml = STUDENTS.map(function(s){
         const evalCell = (s.peerEvals || []).map(function(e){
@@ -1347,11 +1365,11 @@ async function openIndividualTab(){
         }).join('') || '<span class="muted">記録なし</span>';
 
         const ciCell = (s.checkins || []).map(function(c){
-          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>';
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.goalText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
         const coCell = (s.checkouts || []).map(function(c){
-          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
         return '<tr>'
@@ -1388,11 +1406,11 @@ async function openIndividualTab(){
         }).join('') || '<span class="muted">記録なし</span>';
 
         const ciCell = (s.checkins || []).map(function(c){
-          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.goalText) + '</div>';
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.goalText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
         const coCell = (s.checkouts || []).map(function(c){
-          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(c.timestamp) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
+          return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
         return '<tr>'
@@ -1418,11 +1436,11 @@ async function openIndividualTab(){
       }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
 
       const ciRowsHtml = (s.checkins || []).map(function(c){
-        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.goalText) + '</td></tr>';
+        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(timeOnly(c.timestamp)) + '</td><td>' + escapeHtml(c.goalText) + '</td></tr>';
       }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
 
       const coRowsHtml = (s.checkouts || []).map(function(c){
-        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.timestamp) + '</td><td>' + escapeHtml(c.contributionText) + '</td><td>' + escapeHtml(c.prepText) + '</td></tr>';
+        return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(timeOnly(c.timestamp)) + '</td><td>' + escapeHtml(c.contributionText) + '</td><td>' + escapeHtml(c.prepText) + '</td></tr>';
       }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
 
       wrap.innerHTML = '<div class="card table-wrap"><h2>第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</h2>'
@@ -1603,6 +1621,17 @@ async function openManageTab(){
     学籍番号は過去の提出・評価・チェックイン記録に紐づいているため、この画面では変更できません。チームパスワードはこの画面では変更されません。</p>
     <div class="card table-wrap">
       <h2>チーム一覧</h2>
+      <div class="row" style="align-items:flex-end;">
+        <div>
+          <label>新しいチーム名</label>
+          <input type="text" id="newTeamName" placeholder="例）第7班">
+        </div>
+        <div style="flex:0 0 auto;">
+          <button class="btn" id="newTeamBtn" style="margin-top:4px;">チームを追加する</button>
+        </div>
+      </div>
+      <p class="muted">チーム番号は自動採番、チームパスワードは自動発行されます（追加後にその場で表示されます。メンバーはまだいないので、下の「学生一覧」から追加してください）。</p>
+      <div id="newTeamMsg" class="msg"></div>
       <table>
         <thead><tr><th>チーム番号</th><th>チーム名</th><th></th><th>状態</th></tr></thead>
         <tbody id="teamsBody"></tbody>
@@ -1610,6 +1639,31 @@ async function openManageTab(){
     </div>
     <div class="card table-wrap">
       <h2>学生一覧</h2>
+      <div class="row">
+        <div>
+          <label>学籍番号</label>
+          <input type="text" id="newStudentId">
+        </div>
+        <div>
+          <label>氏名</label>
+          <input type="text" id="newStudentName">
+        </div>
+        <div>
+          <label>メール（任意）</label>
+          <input type="text" id="newStudentEmail">
+        </div>
+        <div>
+          <label>所属チーム</label>
+          <select id="newStudentTeamSel"></select>
+        </div>
+        <div>
+          <label>パスワード（任意・空欄で自動生成）</label>
+          <input type="text" id="newStudentPassword">
+        </div>
+      </div>
+      <button class="btn" id="newStudentBtn">学生を追加する</button>
+      <p class="muted">追加後に表示されるパスワードは、その場で学生に伝えてください（この画面を閉じると再表示できません。スプレッドシートのMembersシートでも確認できます）。</p>
+      <div id="newStudentMsg" class="msg"></div>
       <p class="muted">パスワードは「新しいパスワード」欄を空欄のまま再発行すると8桁の数字が自動生成されます。特定の値に変更したい場合は入力してから実行してください。実行後に表示される新しいパスワードは、その場で学生に伝えてください（この画面を閉じると再表示できません。スプレッドシートのMembersシートでも確認できます）。</p>
       <table>
         <thead><tr><th>学籍番号</th><th>氏名</th><th>メール</th><th>所属チーム</th><th></th><th>新しいパスワード（任意）</th><th></th><th>状態</th></tr></thead>
@@ -1663,6 +1717,47 @@ async function openManageTab(){
         if (opt) opt.textContent = '第' + teamNo + '班 ' + teamName;
       });
     }
+
+    function refreshNewStudentTeamSel(){
+      const sel = document.getElementById('newStudentTeamSel');
+      const prev = sel.value;
+      sel.innerHTML = teamOptionsHtml();
+      if (prev && TEAMS.some(function(t){ return String(t.teamNo) === String(prev); })) sel.value = prev;
+    }
+
+    document.getElementById('newTeamBtn').addEventListener('click', async function(){
+      const teamName = document.getElementById('newTeamName').value.trim();
+      if (!teamName){ setMsg('newTeamMsg', 'チーム名を入力してください。', 'error'); return; }
+      const res = await api('teacherCreateTeam', { teamName: teamName });
+      if (!res.ok){ setMsg('newTeamMsg', res.error, 'error'); return; }
+      TEAMS.push({ teamNo: res.teamNo, teamName: res.teamName });
+      document.getElementById('newTeamName').value = '';
+      setMsg('newTeamMsg', '第' + res.teamNo + '班「' + res.teamName + '」を追加しました。チームパスワード：' + res.teamPassword + '（その場でメンバーに伝えてください。この画面を閉じると再表示できません）', 'success');
+      renderTeamsTable();
+      refreshNewStudentTeamSel();
+    });
+
+    document.getElementById('newStudentBtn').addEventListener('click', async function(){
+      const studentId = document.getElementById('newStudentId').value.trim();
+      const name = document.getElementById('newStudentName').value.trim();
+      const email = document.getElementById('newStudentEmail').value.trim();
+      const teamNo = document.getElementById('newStudentTeamSel').value;
+      const password = document.getElementById('newStudentPassword').value.trim();
+      if (!studentId){ setMsg('newStudentMsg', '学籍番号を入力してください。', 'error'); return; }
+      if (!name){ setMsg('newStudentMsg', '氏名を入力してください。', 'error'); return; }
+      if (!teamNo){ setMsg('newStudentMsg', '所属チームを選択してください（チームが1つもない場合は、先にチームを追加してください）。', 'error'); return; }
+      const res = await api('teacherCreateMember', { studentId: studentId, name: name, email: email, teamNo: teamNo, password: password });
+      if (!res.ok){ setMsg('newStudentMsg', res.error, 'error'); return; }
+      MEMBERS.push({ studentId: res.studentId, name: name, email: email, teamNo: teamNo });
+      document.getElementById('newStudentId').value = '';
+      document.getElementById('newStudentName').value = '';
+      document.getElementById('newStudentEmail').value = '';
+      document.getElementById('newStudentPassword').value = '';
+      setMsg('newStudentMsg', '学籍番号 ' + res.studentId + ' を追加しました。パスワード：' + res.password + '（その場で学生に伝えてください。この画面を閉じると再表示できません）', 'success');
+      renderMembersTable();
+    });
+
+    refreshNewStudentTeamSel();
 
     document.getElementById('teamsBody').addEventListener('click', async function(e){
       const btn = e.target.closest('button[data-action="save-team"]');
