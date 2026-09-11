@@ -89,6 +89,11 @@
   .grade-pill{display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; font-weight:700; font-size:12px; color:#fff;}
   .gS{background:#1a8a4a;} .gA{background:#2b5fd9;} .gB{background:#6c757d;} .gC{background:#c9820a;} .gD{background:#c0392b;} .gE{background:#adb5bd;}
   footer.hint{max-width:960px; margin:0 auto; padding:0 16px 40px; color:var(--muted); font-size:12px;}
+  .loading-indicator{
+    position:fixed; top:12px; right:12px; background:var(--accent-dark); color:#fff;
+    padding:7px 16px; border-radius:20px; font-size:12px; z-index:1000;
+    box-shadow:0 2px 10px rgba(0,0,0,0.25);
+  }
   @media (max-width:600px){ .row > *{min-width:100%;} }
 </style>
 </head>
@@ -98,6 +103,8 @@
   <h1>ビジネス開発論 授業支援システム</h1>
   <div id="topbarRight" class="who"></div>
 </header>
+
+<div id="loadingIndicator" class="loading-indicator" hidden>通信中...</div>
 
 <main>
 
@@ -348,7 +355,7 @@
    設定：Google Apps Script のウェブアプリ URL をここに設定してください
    デプロイ後に発行される「/exec」で終わる URL です。
    ========================================================= */
-const API_URL = "https://script.google.com/macros/s/AKfycbwiMM998AqPDqaLkLvhe-Ld4twRxCzHToEMaVb_r5GN9emaRluHe8qyZLOnp4iOGd8Xog/exec";
+const API_URL = "PUT_YOUR_WEB_APP_URL_HERE";
 
 /* ---------------- 共通ユーティリティ ---------------- */
 
@@ -369,17 +376,47 @@ function setMsg(elId, text, type){
   el.style.display = text ? 'block' : 'none';
 }
 
+let _pendingCalls = 0;
+function showLoading(){
+  _pendingCalls++;
+  const el = document.getElementById('loadingIndicator');
+  if (el) el.hidden = false;
+}
+function hideLoading(){
+  _pendingCalls = Math.max(0, _pendingCalls - 1);
+  if (_pendingCalls === 0){
+    const el = document.getElementById('loadingIndicator');
+    if (el) el.hidden = true;
+  }
+}
+
 async function api(action, data){
   if (!API_URL || API_URL.indexOf('PUT_YOUR') === 0){
     alert('API_URL が設定されていません。index.html 冒頭の API_URL を、デプロイした Google Apps Script のウェブアプリURLに書き換えてください。');
     throw new Error('API_URL not configured');
   }
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    body: JSON.stringify(Object.assign({ action: action }, data || {}))
-  });
-  const json = await res.json();
-  return json;
+  showLoading();
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify(Object.assign({ action: action }, data || {}))
+    });
+    let text;
+    try {
+      text = await res.text();
+      return JSON.parse(text);
+    } catch (parseErr) {
+      console.error('APIの応答をJSONとして解析できませんでした。action=' + action, text);
+      alert('サーバーからの応答を正しく読み取れませんでした（' + action + '）。デプロイ設定（アクセスできるユーザー：全員 になっているか）を確認するか、時間をおいて再度お試しください。');
+      return { ok: false, error: '応答の解析に失敗しました' };
+    }
+  } catch (networkErr) {
+    console.error('API通信エラー action=' + action, networkErr);
+    alert('サーバーへの通信に失敗しました（' + action + '）。通信環境をご確認のうえ、再度お試しください。');
+    return { ok: false, error: '通信エラー' };
+  } finally {
+    hideLoading();
+  }
 }
 
 function fileToBase64(file){
@@ -646,14 +683,31 @@ async function doTeacherLogin(){
   const teacherName = document.getElementById('teacherLoginName').value;
   const password = document.getElementById('teacherLoginPw').value;
   setMsg('teacherLoginMsg','');
+  // ログインと初期データ取得を1回の通信にまとめているため、往復は1回だけです
   const res = await api('teacherLogin', { teacherName, password });
   if (!res.ok){ setMsg('teacherLoginMsg', res.error); return; }
   session = { role: 'teacher', teacherName: res.teacherName };
   updateTopbar();
-  await refreshAssignSelectors();
+  applyTeacherHomeInit(res.assignments || [], res.teams || []);
   teacherTab('assign');
-  await loadTeacherAssignmentList();
   showView('view-teacher-home');
+}
+
+function applyTeacherHomeInit(assignments, teams){
+  // 課題管理タブの一覧
+  document.getElementById('assignListBody').innerHTML = assignments.map(a => `
+    <tr>
+      <td>${escapeHtml(a.date)}</td>
+      <td>${escapeHtml(a.text_prompt)}</td>
+      <td>${escapeHtml(a.file_prompt)}</td>
+      <td><button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button></td>
+    </tr>`).join('');
+  // チーム別確認・評価タブ／提示モードタブのセレクト
+  const opts = assignments.map(a => `<option value="${a.assignment_id}">${escapeHtml(a.date)}</option>`).join('');
+  document.getElementById('reviewAssignSel').innerHTML = opts;
+  document.getElementById('presentAssignSel').innerHTML = opts;
+  document.getElementById('reviewTeamSel').innerHTML = teams.map(t =>
+    `<option value="${t.teamNo}">第${t.teamNo}班 ${escapeHtml(t.teamName)}</option>`).join('');
 }
 
 function teacherTab(name){
@@ -677,20 +731,13 @@ async function submitTeacherAssignment(){
   const res = await api('teacherCreateAssignment', { date, textPrompt, filePrompt });
   if (!res.ok){ setMsg('assignMsg', res.error); return; }
   setMsg('assignMsg','保存しました。', 'success');
-  await loadTeacherAssignmentList();
-  await refreshAssignSelectors();
+  await refreshTeacherHome();
 }
 
-async function loadTeacherAssignmentList(){
-  const res = await api('teacherListAssignments', {});
+async function refreshTeacherHome(){
+  const res = await api('teacherHomeInit', {});
   if (!res.ok) return;
-  document.getElementById('assignListBody').innerHTML = res.assignments.map(a => `
-    <tr>
-      <td>${escapeHtml(a.date)}</td>
-      <td>${escapeHtml(a.text_prompt)}</td>
-      <td>${escapeHtml(a.file_prompt)}</td>
-      <td><button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button></td>
-    </tr>`).join('');
+  applyTeacherHomeInit(res.assignments || [], res.teams || []);
 }
 
 function editAssignment(date, textPrompt, filePrompt){
@@ -698,20 +745,6 @@ function editAssignment(date, textPrompt, filePrompt){
   document.getElementById('assignTextPrompt').value = decodeURIComponent(textPrompt);
   document.getElementById('assignFilePrompt').value = decodeURIComponent(filePrompt);
   window.scrollTo(0,0);
-}
-
-async function refreshAssignSelectors(){
-  const res = await api('teacherListAssignments', {});
-  if (!res.ok) return;
-  const opts = res.assignments.map(a => `<option value="${a.assignment_id}">${escapeHtml(a.date)}</option>`).join('');
-  document.getElementById('reviewAssignSel').innerHTML = opts;
-  document.getElementById('presentAssignSel').innerHTML = opts;
-
-  const teamsRes = await api('teacherOverview', {});
-  if (teamsRes.ok){
-    document.getElementById('reviewTeamSel').innerHTML = teamsRes.matrix.map(t =>
-      `<option value="${t.teamNo}">第${t.teamNo}班 ${escapeHtml(t.teamName)}</option>`).join('');
-  }
 }
 
 /* --- チーム別確認・評価 --- */
