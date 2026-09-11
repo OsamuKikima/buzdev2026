@@ -186,28 +186,21 @@
     </div>
   </section>
 
-  <!-- 課題詳細（提出フォーム） -->
+  <!-- 課題詳細（同じ日付の問いをまとめて表示・提出） -->
   <section id="view-team-assignment" class="view hidden">
     <div class="card">
-      <button class="link-btn" onclick="showView('view-team-home')">&larr; 一覧に戻る</button>
+      <div class="row" style="margin-bottom:6px;">
+        <button class="link-btn" onclick="showView('view-team-home')">&larr; 課題一覧に戻る</button>
+        <button class="link-btn" onclick="logout()">全体（トップ）に戻る</button>
+      </div>
       <h2 id="taDate"></h2>
-      <div id="taPrompts" class="muted"></div>
       <div id="taMsg" class="msg"></div>
+      <div id="taPastNotice" style="display:none;" class="msg success">この日の課題は提出済みです。内容は再提出により更新できます。</div>
 
-      <div id="taPastNotice" style="display:none;" class="msg success">この課題は提出済みです。内容は再提出により上書きできます。</div>
-
-      <h3>教員からのコメント</h3>
-      <p id="taTeacherComment" class="muted">（まだありません）</p>
-
-      <h3>課題の提出</h3>
-      <label>回答（テキスト）</label>
-      <textarea id="taText"></textarea>
-      <label>画像ファイル添付（任意）</label>
-      <input type="file" id="taFile" accept="image/*">
-      <div id="taExistingImg"></div>
+      <div id="taQuestions"></div>
 
       <h3>チームメンバーの貢献評価（チーム代表者が入力）</h3>
-      <p class="muted">各メンバーの貢献内容と貢献度（10点満点）を入力してください。</p>
+      <p class="muted">この日の課題全体について、各メンバーの貢献内容と貢献度（10点満点）を入力してください。</p>
       <div id="taPeerEvals"></div>
 
       <button class="btn" id="taSubmitBtn" onclick="submitAssignmentForm()">提出する</button>
@@ -282,7 +275,8 @@
     </div>
 
     <div id="tab-assign" class="card">
-      <h2>課題の登録・編集</h2>
+      <h2 id="assignFormTitle">課題（問い）の新規登録</h2>
+      <p class="muted">同じ授業日に複数の問い（テキスト・ファイルそれぞれ）を登録できます。登録すると、その日の課題として学生側にまとめて表示されます。</p>
       <div id="assignMsg" class="msg"></div>
       <label>授業日</label>
       <input type="date" id="assignDate">
@@ -290,10 +284,11 @@
       <textarea id="assignTextPrompt"></textarea>
       <label>問い（ファイル）</label>
       <textarea id="assignFilePrompt" placeholder="例）本日のワークで作成した写真を添付してください"></textarea>
-      <button class="btn" onclick="submitTeacherAssignment()">保存する</button>
+      <button class="btn" id="assignSaveBtn" onclick="submitTeacherAssignment()">追加する</button>
+      <button class="btn secondary" id="assignCancelBtn" style="display:none;" onclick="cancelEditAssignment()">新規登録に戻す</button>
 
-      <h3>登録済みの課題</h3>
-      <table><thead><tr><th>日付</th><th>テキスト問い</th><th>ファイル問い</th><th></th></tr></thead>
+      <h3>登録済みの課題（日付ごと）</h3>
+      <table><thead><tr><th>日付</th><th>問い</th><th></th></tr></thead>
         <tbody id="assignListBody"></tbody>
       </table>
     </div>
@@ -316,7 +311,7 @@
     <div id="tab-overview" class="card hidden">
       <h2>全体一覧（チーム × 課題）</h2>
       <div style="overflow-x:auto;">
-        <table id="overviewTable"><thead><tr id="overviewHead"></tr></thead><tbody id="overviewBody"></tbody></table>
+        <table id="overviewTable"><thead><tr id="overviewDateHead"></tr><tr id="overviewHead"></tr></thead><tbody id="overviewBody"></tbody></table>
       </div>
       <p class="muted">E = 未提出。クリックすると該当のチーム別評価画面に移動します。</p>
     </div>
@@ -526,43 +521,81 @@ async function doTeamLogin(){
   showView('view-team-home');
 }
 
+// 同じ日付の課題（問い）をひとまとめにする
+function groupByDate(list){
+  const groups = [];
+  let current = null;
+  list.forEach(a => {
+    if (!current || current.date !== a.date){
+      current = { date: a.date, items: [] };
+      groups.push(current);
+    }
+    current.items.push(a);
+  });
+  return groups;
+}
+
 async function loadTeamAssignments(){
   const res = await api('listAssignmentsForTeam', { teamNo: session.teamNo });
   if (!res.ok) return;
   currentAssignmentCache = res.assignments;
   const wrap = document.getElementById('teamAssignList');
   if (!res.assignments.length){ wrap.innerHTML = '<p class="muted">まだ課題が登録されていません。</p>'; return; }
-  wrap.innerHTML = res.assignments.map((a, idx) => `
-    <div class="assign-item" onclick="openTeamAssignment(${idx})">
+
+  const groups = groupByDate(res.assignments);
+  wrap.innerHTML = groups.map(g => {
+    const total = g.items.length;
+    const doneCount = g.items.filter(a => a.submitted).length;
+    const allDone = doneCount === total;
+    const preview = g.items.map(a => a.textPrompt || a.filePrompt || '（問い）').join(' ／ ').slice(0, 60);
+    return `
+    <div class="assign-item" onclick="openTeamDateGroup('${g.date}')">
       <div class="top">
-        <strong>${escapeHtml(a.date)}</strong>
-        <span class="badge ${a.submitted ? 'done' : 'todo'}">${a.submitted ? '提出済み' : '未提出'}</span>
+        <strong>${escapeHtml(g.date)}</strong>
+        <span class="badge ${allDone ? 'done' : 'todo'}">${total > 1 ? (doneCount + '/' + total + ' 提出済み') : (allDone ? '提出済み' : '未提出')}</span>
       </div>
-      <div class="muted">${escapeHtml((a.textPrompt||'').slice(0,60))}</div>
-    </div>
-  `).join('');
+      <div class="muted">${escapeHtml(preview)}${total > 1 ? '（問い' + total + '件）' : ''}</div>
+    </div>`;
+  }).join('');
 }
 
-function openTeamAssignment(idx){
-  const a = currentAssignmentCache[idx];
-  window._currentAssignment = a;
-  document.getElementById('taDate').textContent = a.date + ' の課題';
-  document.getElementById('taPrompts').innerHTML =
-    (a.textPrompt ? '<div><strong>問い（テキスト）：</strong>' + escapeHtml(a.textPrompt) + '</div>' : '') +
-    (a.filePrompt ? '<div><strong>問い（ファイル）：</strong>' + escapeHtml(a.filePrompt) + '</div>' : '');
+function openTeamDateGroup(date){
+  const items = currentAssignmentCache.filter(a => a.date === date);
+  window._currentDateGroup = items;
+  document.getElementById('taDate').textContent = date + ' の課題';
   setMsg('taMsg','');
-  document.getElementById('taPastNotice').style.display = a.submitted ? 'block' : 'none';
-  document.getElementById('taTeacherComment').textContent = a.teacherComment || '（まだありません）';
-  document.getElementById('taText').value = a.submission ? (a.submission.textContent || '') : '';
-  document.getElementById('taFile').value = '';
-  document.getElementById('taExistingImg').innerHTML = (a.submission && a.submission.fileUrl)
-    ? '<p class="muted">現在の添付画像：</p><img class="thumb" src="' + a.submission.fileUrl + '">' : '';
-  document.getElementById('taSubmitBtn').textContent = a.submitted ? '更新する' : '提出する';
 
+  const allSubmitted = items.every(a => a.submitted);
+  document.getElementById('taPastNotice').style.display = allSubmitted ? 'block' : 'none';
+  document.getElementById('taSubmitBtn').textContent = allSubmitted ? '更新する' : '提出する';
+
+  document.getElementById('taQuestions').innerHTML = items.map((a, i) => {
+    const label = items.length > 1 ? '問' + (i + 1) : '課題';
+    const promptsHtml =
+      (a.textPrompt ? '<div><strong>問い（テキスト）：</strong>' + escapeHtml(a.textPrompt) + '</div>' : '') +
+      (a.filePrompt ? '<div><strong>問い（ファイル）：</strong>' + escapeHtml(a.filePrompt) + '</div>' : '');
+    const existingImg = (a.submission && a.submission.fileUrl)
+      ? '<p class="muted">現在の添付画像：</p><img class="thumb" src="' + a.submission.fileUrl + '">' : '';
+    return `
+      <div class="member-row" data-assignment-id="${a.assignmentId}">
+        <strong>${escapeHtml(label)}</strong>
+        <div class="muted">${promptsHtml}</div>
+        <p class="muted">教員からのコメント：${escapeHtml(a.teacherComment || '（まだありません）')}</p>
+        ${a.textPrompt ? `
+        <label>回答（テキスト）</label>
+        <textarea id="taText_${a.assignmentId}">${escapeHtml(a.submission ? (a.submission.textContent || '') : '')}</textarea>` : ''}
+        ${a.filePrompt ? `
+        <label>画像ファイル添付</label>
+        <input type="file" id="taFile_${a.assignmentId}" accept="image/*">
+        ${existingImg}` : ''}
+      </div>`;
+  }).join('');
+
+  // メンバー貢献評価は日の課題全体で1回入力する（いずれかの問いに既存の評価があれば読み込む）
   const members = session.members || [];
-  const peerEvals = a.peerEvals || [];
+  const existingPeerEvals = (items.find(a => (a.peerEvals || []).length) || {}).peerEvals || [];
   document.getElementById('taPeerEvals').innerHTML = members.map(m => {
-    const pe = peerEvals.find(p => String(p.studentId) === String(m.studentId));
+    const pe = existingPeerEvals.find(p => String(p.studentId) === String(m.studentId));
     return `
       <div class="member-row">
         <strong>${escapeHtml(m.name)}（${escapeHtml(m.studentId)}）</strong>
@@ -577,10 +610,9 @@ function openTeamAssignment(idx){
 }
 
 async function submitAssignmentForm(){
-  const a = window._currentAssignment;
-  const textContent = document.getElementById('taText').value;
-  const fileInput = document.getElementById('taFile');
+  const items = window._currentDateGroup || [];
   const members = session.members || [];
+  const wasAllSubmitted = items.every(a => a.submitted);
 
   const peerEvals = members.map(m => ({
     studentId: m.studentId,
@@ -588,24 +620,20 @@ async function submitAssignmentForm(){
     score: document.getElementById('pe_score_'+m.studentId).value
   }));
 
-  const payload = {
-    assignmentId: a.assignmentId,
-    teamNo: session.teamNo,
-    textContent: textContent,
-    peerEvals: peerEvals
-  };
-
-  if (fileInput.files && fileInput.files[0]){
-    const b64 = await fileToBase64(fileInput.files[0]);
-    payload.fileBase64 = b64;
-    payload.fileName = fileInput.files[0].name;
-  }
-
-  const wasSubmitted = a.submitted;
   setMsg('taMsg','送信中...', 'success');
-  const res = await api('submitAssignment', payload);
-  if (!res.ok){ setMsg('taMsg', res.error); return; }
-  setMsg('taMsg', wasSubmitted ? '更新しました。' : '提出しました。', 'success');
+  for (const a of items){
+    const payload = { assignmentId: a.assignmentId, teamNo: session.teamNo, peerEvals: peerEvals };
+    const textEl = document.getElementById('taText_'+a.assignmentId);
+    if (textEl) payload.textContent = textEl.value;
+    const fileEl = document.getElementById('taFile_'+a.assignmentId);
+    if (fileEl && fileEl.files && fileEl.files[0]){
+      payload.fileBase64 = await fileToBase64(fileEl.files[0]);
+      payload.fileName = fileEl.files[0].name;
+    }
+    const res = await api('submitAssignment', payload);
+    if (!res.ok){ setMsg('taMsg', res.error); return; }
+  }
+  setMsg('taMsg', wasAllSubmitted ? '更新しました。' : '提出しました。', 'success');
   document.getElementById('taSubmitBtn').textContent = '更新する';
   document.getElementById('taPastNotice').style.display = 'block';
   await loadTeamAssignments();
@@ -701,21 +729,55 @@ async function doTeacherLogin(){
   showView('view-teacher-home');
 }
 
+// assignmentIdをキーに、日付ごとの通し番号（問1／問2…）を計算する
+function computeAssignmentLabels(assignments){
+  const seqByDate = {};
+  const labelOf = {};
+  assignments.forEach(a => {
+    seqByDate[a.date] = (seqByDate[a.date] || 0) + 1;
+    labelOf[a.assignment_id] = seqByDate[a.date];
+  });
+  const countByDate = {};
+  assignments.forEach(a => { countByDate[a.date] = (countByDate[a.date] || 0) + 1; });
+  return { labelOf, countByDate };
+}
+
 function applyTeacherHomeInit(assignments, teams){
-  // 課題管理タブの一覧
-  document.getElementById('assignListBody').innerHTML = assignments.map(a => `
-    <tr>
-      <td>${escapeHtml(a.date)}</td>
-      <td>${escapeHtml(a.text_prompt)}</td>
-      <td>${escapeHtml(a.file_prompt)}</td>
-      <td>
-        <button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button>
-        &nbsp;|&nbsp;
-        <button class="link-btn" style="color:var(--danger);" onclick="deleteTeacherAssignment('${a.assignment_id}')">削除</button>
-      </td>
-    </tr>`).join('');
+  window._assignmentCache = assignments;
+  const { labelOf, countByDate } = computeAssignmentLabels(assignments);
+
+  // 課題管理タブの一覧（日付ごとにグループ化して表示）
+  let lastDate = null;
+  let rowsHtml = '';
+  assignments.forEach(a => {
+    if (a.date !== lastDate){
+      rowsHtml += `<tr style="background:#f0f2f5;"><td colspan="3"><strong>${escapeHtml(a.date)}</strong></td></tr>`;
+      lastDate = a.date;
+    }
+    const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignment_id] + '：') : '';
+    const promptSummary = [a.text_prompt ? 'テキスト：' + a.text_prompt : '', a.file_prompt ? 'ファイル：' + a.file_prompt : '']
+      .filter(Boolean).join(' ／ ');
+    rowsHtml += `
+      <tr>
+        <td></td>
+        <td>${escapeHtml(label)}${escapeHtml(promptSummary)}</td>
+        <td>
+          <button class="link-btn" onclick="editAssignment('${a.assignment_id}')">編集</button>
+          &nbsp;|&nbsp;
+          <button class="link-btn" style="color:var(--danger);" onclick="deleteTeacherAssignment('${a.assignment_id}')">削除</button>
+        </td>
+      </tr>`;
+  });
+  document.getElementById('assignListBody').innerHTML = rowsHtml;
+
   // チーム別確認・評価タブ／提示モードタブのセレクト
-  const opts = assignments.map(a => `<option value="${a.assignment_id}">${escapeHtml(a.date)}</option>`).join('');
+  // 日付だけでなく問いの内容（プレビュー）も表示し、同日に複数ある場合は問い番号で区別する
+  const opts = assignments.map(a => {
+    const qLabel = countByDate[a.date] > 1 ? ('（問' + labelOf[a.assignment_id] + '）') : '';
+    const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
+    const label = a.date + qLabel + '：' + preview;
+    return `<option value="${a.assignment_id}">${escapeHtml(label)}</option>`;
+  }).join('');
   document.getElementById('reviewAssignSel').innerHTML = opts;
   document.getElementById('presentAssignSel').innerHTML = opts;
   document.getElementById('reviewTeamSel').innerHTML = teams.map(t =>
@@ -735,14 +797,19 @@ function teacherTab(name){
 
 /* --- 課題管理 --- */
 
+let _editingAssignmentId = null;
+
 async function submitTeacherAssignment(){
   const date = document.getElementById('assignDate').value;
   const textPrompt = document.getElementById('assignTextPrompt').value;
   const filePrompt = document.getElementById('assignFilePrompt').value;
   if (!date){ setMsg('assignMsg','授業日を選択してください。'); return; }
-  const res = await api('teacherCreateAssignment', { date, textPrompt, filePrompt });
+  const payload = { date, textPrompt, filePrompt };
+  if (_editingAssignmentId) payload.assignmentId = _editingAssignmentId;
+  const res = await api('teacherCreateAssignment', payload);
   if (!res.ok){ setMsg('assignMsg', res.error); return; }
-  setMsg('assignMsg','保存しました。', 'success');
+  setMsg('assignMsg', _editingAssignmentId ? '更新しました。' : '追加しました。', 'success');
+  cancelEditAssignment();
   await refreshTeacherHome();
 }
 
@@ -752,15 +819,33 @@ async function refreshTeacherHome(){
   applyTeacherHomeInit(res.assignments || [], res.teams || []);
 }
 
-function editAssignment(date, textPrompt, filePrompt){
-  document.getElementById('assignDate').value = date;
-  document.getElementById('assignTextPrompt').value = decodeURIComponent(textPrompt);
-  document.getElementById('assignFilePrompt').value = decodeURIComponent(filePrompt);
+function editAssignment(assignmentId){
+  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
+  if (!a) return;
+  _editingAssignmentId = assignmentId;
+  document.getElementById('assignDate').value = a.date;
+  document.getElementById('assignTextPrompt').value = a.text_prompt;
+  document.getElementById('assignFilePrompt').value = a.file_prompt;
+  document.getElementById('assignFormTitle').textContent = '課題（問い）の編集';
+  document.getElementById('assignSaveBtn').textContent = '更新する';
+  document.getElementById('assignCancelBtn').style.display = 'inline-block';
   window.scrollTo(0,0);
 }
 
+function cancelEditAssignment(){
+  _editingAssignmentId = null;
+  document.getElementById('assignTextPrompt').value = '';
+  document.getElementById('assignFilePrompt').value = '';
+  document.getElementById('assignDate').value = todayIso();
+  document.getElementById('assignFormTitle').textContent = '課題（問い）の新規登録';
+  document.getElementById('assignSaveBtn').textContent = '追加する';
+  document.getElementById('assignCancelBtn').style.display = 'none';
+}
+
 async function deleteTeacherAssignment(assignmentId){
-  const sure = confirm('この課題（' + assignmentId + '）を削除しますか？\n削除すると学生側の一覧からも表示されなくなります（提出済みの内容自体はスプレッドシートに残ります）。');
+  const a = (window._assignmentCache || []).find(x => x.assignment_id === assignmentId);
+  const label = a ? (a.date + '　' + (a.text_prompt || a.file_prompt || '')) : assignmentId;
+  const sure = confirm('この課題（' + label + '）を削除しますか？\n削除すると学生側の一覧からも表示されなくなります（提出済みの内容自体はスプレッドシートに残ります）。');
   if (!sure) return;
   const res = await api('teacherDeleteAssignment', { assignmentId });
   if (!res.ok){ setMsg('assignMsg', res.error); return; }
@@ -835,8 +920,29 @@ function shortTs(ts){
 async function loadTeacherOverview(){
   const res = await api('teacherOverview', {});
   if (!res.ok) return;
+
+  const { labelOf, countByDate } = computeAssignmentLabels(
+    res.assignmentDates.map(a => ({ assignment_id: a.assignmentId, date: a.date }))
+  );
+
+  // 1行目：日付（同じ日付が続く分だけ横に結合）
+  let dateHeadHtml = '<th></th>';
+  let i = 0;
+  while (i < res.assignmentDates.length){
+    const date = res.assignmentDates[i].date;
+    let span = 0;
+    while (i + span < res.assignmentDates.length && res.assignmentDates[i + span].date === date) span++;
+    dateHeadHtml += '<th colspan="'+span+'">'+escapeHtml(date)+'</th>';
+    i += span;
+  }
+  document.getElementById('overviewDateHead').innerHTML = dateHeadHtml;
+
+  // 2行目：問い番号（同じ日付に複数ある場合のみ表示）
   document.getElementById('overviewHead').innerHTML =
-    '<th>班</th>' + res.assignmentDates.map(a => '<th>'+escapeHtml(a.date)+'</th>').join('');
+    '<th>班</th>' + res.assignmentDates.map(a => {
+      const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignmentId]) : '';
+      return '<th>'+escapeHtml(label)+'</th>';
+    }).join('');
   document.getElementById('overviewBody').innerHTML = res.matrix.map(row => {
     const cells = row.cells.map(c => {
       const g = c.grade || (c.submitted ? '' : 'E');
