@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ビジネス開発論 授業支援システム</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --border:#dde1e6; --text:#1f2430; --muted:#666f7d;
+    --accent:#2b5fd9; --accent-dark:#1c46ad; --ok:#1a8a4a; --warn:#c9820a; --danger:#c0392b;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6;
+  }
+  header.topbar{
+    background:var(--accent); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center;
+    flex-wrap:wrap; gap:8px;
+  }
+  header.topbar h1{font-size:16px; margin:0; font-weight:600;}
+  header.topbar .who{font-size:13px; opacity:0.95;}
+  header.topbar button{
+    background:rgba(255,255,255,0.18); color:#fff; border:1px solid rgba(255,255,255,0.4);
+    border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px;
+  }
+  header.topbar button:hover{background:rgba(255,255,255,0.3);}
+  main{max-width:960px; margin:0 auto; padding:20px 16px 60px;}
+  .view.hidden{display:none;}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px; margin-bottom:16px;
+  }
+  h2{font-size:19px; margin:0 0 14px;}
+  h3{font-size:15px; margin:18px 0 8px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px;}
+  input[type=text],input[type=password],input[type=number],input[type=date],input[type=email],textarea,select{
+    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px;
+    font-family:inherit; background:#fff; color:var(--text);
+  }
+  textarea{min-height:80px; resize:vertical;}
+  .row{display:flex; gap:10px; flex-wrap:wrap;}
+  .row > *{flex:1; min-width:140px;}
+  .btn{
+    display:inline-block; background:var(--accent); color:#fff; border:none; border-radius:6px;
+    padding:10px 18px; font-size:14px; cursor:pointer; margin-top:14px;
+  }
+  .btn:hover{background:var(--accent-dark);}
+  .btn.secondary{background:#eef1f5; color:var(--text); border:1px solid var(--border);}
+  .btn.secondary:hover{background:#e2e6ec;}
+  .btn.small{padding:6px 12px; font-size:13px; margin-top:0;}
+  .btn:disabled{opacity:0.6; cursor:default;}
+  .home-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;}
+  .home-grid .card{cursor:pointer; text-align:center; padding:28px 16px; transition:box-shadow .15s;}
+  .home-grid .card:hover{box-shadow:0 2px 10px rgba(0,0,0,0.08);}
+  .home-grid .card .icon{font-size:28px; margin-bottom:10px;}
+  .msg{padding:10px 12px; border-radius:6px; font-size:13px; margin:10px 0; display:none;}
+  .msg.error{background:#fdecea; color:var(--danger); display:block;}
+  .msg.success{background:#e9f7ef; color:var(--ok); display:block;}
+  .badge{display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px; font-weight:600;}
+  .badge.done{background:#e9f7ef; color:var(--ok);}
+  .badge.todo{background:#fff4e0; color:var(--warn);}
+  .assign-item{border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; cursor:pointer;}
+  .assign-item:hover{background:#fafbfd;}
+  .assign-item .top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{border:1px solid var(--border); padding:7px 8px; text-align:left; vertical-align:top;}
+  th{background:#f0f2f5;}
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px;}
+  .tabs button{
+    background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px 14px;
+    font-size:13px; cursor:pointer;
+  }
+  .tabs button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .member-row{border:1px dashed var(--border); border-radius:8px; padding:12px; margin-bottom:10px;}
+  .muted{color:var(--muted); font-size:13px; white-space:pre-wrap;}
+  .kv{display:flex; justify-content:space-between; font-size:13px; margin:4px 0;}
+  .thumb{max-width:100%; border-radius:8px; border:1px solid var(--border); margin:8px 0;}
+  .link-btn{background:none;border:none;color:var(--accent);cursor:pointer;padding:0;font-size:13px;text-decoration:underline;}
+  .present-overlay{
+    position:fixed; inset:0; background:#111; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; z-index:999;
+  }
+  .present-overlay img{max-width:92vw; max-height:78vh; border-radius:6px;}
+  .present-overlay .pbar{position:absolute; top:16px; left:0; right:0; display:flex; justify-content:space-between; padding:0 20px;}
+  .present-overlay .pbar button{background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:8px 16px; cursor:pointer;}
+  .present-overlay .pname{color:#fff; font-size:20px; margin-top:14px;}
+  .grade-pill{display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; font-weight:700; font-size:12px; color:#fff;}
+  .gS{background:#1a8a4a;} .gA{background:#2b5fd9;} .gB{background:#6c757d;} .gC{background:#c9820a;} .gD{background:#c0392b;} .gE{background:#adb5bd;}
+  footer.hint{max-width:960px; margin:0 auto; padding:0 16px 40px; color:var(--muted); font-size:12px;}
+  @media (max-width:600px){ .row > *{min-width:100%;} }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>ビジネス開発論 授業支援システム</h1>
+  <div id="topbarRight" class="who"></div>
+</header>
+
+<main>
+
+  <!-- ===================== ホーム ===================== -->
+  <section id="view-home" class="view">
+    <div class="card">
+      <h2>ようこそ</h2>
+      <p class="muted">目的に合わせて選択してください。</p>
+    </div>
+    <div class="home-grid">
+      <div class="card" onclick="showView('view-team-register')">
+        <div class="icon">📝</div><strong>チーム新規登録</strong>
+        <p class="muted">まだチームがない場合はこちら</p>
+      </div>
+      <div class="card" onclick="showView('view-team-login')">
+        <div class="icon">👥</div><strong>チーム画面ログイン</strong>
+        <p class="muted">課題の提出・確認</p>
+      </div>
+      <div class="card" onclick="showView('view-student-login')">
+        <div class="icon">🙋</div><strong>個人画面ログイン</strong>
+        <p class="muted">チェックイン・チェックアウト</p>
+      </div>
+      <div class="card" onclick="showView('view-teacher-login')">
+        <div class="icon">🎓</div><strong>教員ログイン</strong>
+        <p class="muted">浦野・聞間</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== チーム新規登録 ===================== -->
+  <section id="view-team-register" class="view hidden">
+    <div class="card">
+      <h2>チーム新規登録</h2>
+      <div id="regMsg" class="msg"></div>
+
+      <div id="regForm">
+        <label>チーム名</label>
+        <input type="text" id="regTeamName" placeholder="例）チームA">
+
+        <h3>メンバー（最大5人・1人目は必須）</h3>
+        <div id="regMembers"></div>
+        <p class="muted">※学籍番号・氏名・パスワードは各メンバー必須です。パスワードは個人画面のログインに使います。メールは任意です。</p>
+        <button class="btn" onclick="submitTeamRegister()">登録する</button>
+      </div>
+
+      <div id="regResult" style="display:none;">
+        <div class="msg success" style="display:block;">
+          登録が完了しました。下記の情報を必ず控えてください（再表示できません）。
+        </div>
+        <div class="kv"><span>チーム番号</span><strong id="resTeamNo"></strong></div>
+        <div class="kv"><span>チームパスワード</span><strong id="resTeamPassword"></strong></div>
+        <button class="btn" onclick="goToTeamLoginFromReg()">チーム画面ログインへ進む</button>
+      </div>
+
+      <button class="btn secondary" onclick="showView('view-home')">戻る</button>
+    </div>
+  </section>
+
+  <!-- ===================== チームログイン ===================== -->
+  <section id="view-team-login" class="view hidden">
+    <div class="card">
+      <h2>チーム画面ログイン</h2>
+      <div id="teamLoginMsg" class="msg"></div>
+      <label>チーム番号</label>
+      <input type="text" id="teamLoginNo" inputmode="numeric">
+      <label>チームパスワード</label>
+      <input type="password" id="teamLoginPw">
+      <button class="btn" onclick="doTeamLogin()">ログイン</button>
+      <button class="btn secondary" onclick="showView('view-home')">戻る</button>
+    </div>
+  </section>
+
+  <!-- ===================== チームホーム ===================== -->
+  <section id="view-team-home" class="view hidden">
+    <div class="card">
+      <h2 id="teamHomeTitle"></h2>
+      <p class="muted">下の一覧から課題を選んで提出・確認できます。</p>
+      <div id="teamAssignList"></div>
+    </div>
+  </section>
+
+  <!-- 課題詳細（提出フォーム） -->
+  <section id="view-team-assignment" class="view hidden">
+    <div class="card">
+      <button class="link-btn" onclick="showView('view-team-home')">&larr; 一覧に戻る</button>
+      <h2 id="taDate"></h2>
+      <div id="taPrompts" class="muted"></div>
+      <div id="taMsg" class="msg"></div>
+
+      <div id="taPastNotice" style="display:none;" class="msg success">この課題は提出済みです。内容は再提出により上書きできます。</div>
+
+      <h3>教員からのコメント</h3>
+      <p id="taTeacherComment" class="muted">（まだありません）</p>
+
+      <h3>課題の提出</h3>
+      <label>回答（テキスト）</label>
+      <textarea id="taText"></textarea>
+      <label>画像ファイル添付（任意）</label>
+      <input type="file" id="taFile" accept="image/*">
+      <div id="taExistingImg"></div>
+
+      <h3>チームメンバーの貢献評価（チーム代表者が入力）</h3>
+      <p class="muted">各メンバーの貢献内容と貢献度（10点満点）を入力してください。</p>
+      <div id="taPeerEvals"></div>
+
+      <button class="btn" onclick="submitAssignmentForm()">提出する</button>
+    </div>
+  </section>
+
+  <!-- ===================== 個人ログイン ===================== -->
+  <section id="view-student-login" class="view hidden">
+    <div class="card">
+      <h2>個人画面ログイン</h2>
+      <div id="studentLoginMsg" class="msg"></div>
+      <label>学籍番号</label>
+      <input type="text" id="studentLoginId">
+      <label>パスワード</label>
+      <input type="password" id="studentLoginPw">
+      <button class="btn" onclick="doStudentLogin()">ログイン</button>
+      <button class="btn secondary" onclick="showView('view-home')">戻る</button>
+    </div>
+  </section>
+
+  <!-- ===================== 個人ホーム ===================== -->
+  <section id="view-student-home" class="view hidden">
+    <div class="card">
+      <h2 id="studentHomeTitle"></h2>
+      <p class="muted" id="studentHomeDate"></p>
+      <div id="studentMsg" class="msg"></div>
+
+      <h3>チェックイン：今日の授業コマで意識したいこと（目標）</h3>
+      <textarea id="checkinText"></textarea>
+      <button class="btn" onclick="submitCheckin()">チェックインを送信</button>
+      <p class="muted" id="checkinStatus"></p>
+
+      <h3>チェックアウト：自分がチームに貢献できたこと</h3>
+      <textarea id="checkoutContrib"></textarea>
+      <h3 style="margin-top:10px;">次回の授業に向けて準備すること</h3>
+      <textarea id="checkoutPrep"></textarea>
+      <button class="btn" onclick="submitCheckout()">チェックアウトを送信</button>
+      <p class="muted" id="checkoutStatus"></p>
+    </div>
+
+    <div class="card">
+      <h3>これまでの記録（直近）</h3>
+      <div id="studentHistory" class="muted">読み込み中...</div>
+    </div>
+  </section>
+
+  <!-- ===================== 教員ログイン ===================== -->
+  <section id="view-teacher-login" class="view hidden">
+    <div class="card">
+      <h2>教員ログイン</h2>
+      <div id="teacherLoginMsg" class="msg"></div>
+      <label>教員名</label>
+      <select id="teacherLoginName">
+        <option value="浦野">浦野</option>
+        <option value="聞間">聞間</option>
+      </select>
+      <label>パスワード</label>
+      <input type="password" id="teacherLoginPw">
+      <button class="btn" onclick="doTeacherLogin()">ログイン</button>
+      <button class="btn secondary" onclick="showView('view-home')">戻る</button>
+    </div>
+  </section>
+
+  <!-- ===================== 教員ホーム ===================== -->
+  <section id="view-teacher-home" class="view hidden">
+    <div class="tabs">
+      <button id="tab-btn-assign" onclick="teacherTab('assign')">課題管理</button>
+      <button id="tab-btn-review" onclick="teacherTab('review')">チーム別確認・評価</button>
+      <button id="tab-btn-overview" onclick="teacherTab('overview')">全体一覧</button>
+      <button id="tab-btn-individual" onclick="teacherTab('individual')">個人一覧</button>
+      <button id="tab-btn-present" onclick="teacherTab('present')">提示モード</button>
+    </div>
+
+    <div id="tab-assign" class="card">
+      <h2>課題の登録・編集</h2>
+      <div id="assignMsg" class="msg"></div>
+      <label>授業日</label>
+      <input type="date" id="assignDate">
+      <label>問い（テキスト）</label>
+      <textarea id="assignTextPrompt"></textarea>
+      <label>問い（ファイル）</label>
+      <textarea id="assignFilePrompt" placeholder="例）本日のワークで作成した写真を添付してください"></textarea>
+      <button class="btn" onclick="submitTeacherAssignment()">保存する</button>
+
+      <h3>登録済みの課題</h3>
+      <table><thead><tr><th>日付</th><th>テキスト問い</th><th>ファイル問い</th><th></th></tr></thead>
+        <tbody id="assignListBody"></tbody>
+      </table>
+    </div>
+
+    <div id="tab-review" class="card hidden">
+      <h2>チーム別 確認・評価</h2>
+      <div class="row">
+        <div>
+          <label>課題（授業日）</label>
+          <select id="reviewAssignSel" onchange="loadTeamReview()"></select>
+        </div>
+        <div>
+          <label>チーム</label>
+          <select id="reviewTeamSel" onchange="loadTeamReview()"></select>
+        </div>
+      </div>
+      <div id="reviewBody" class="muted">課題とチームを選択してください。</div>
+    </div>
+
+    <div id="tab-overview" class="card hidden">
+      <h2>全体一覧（チーム × 課題）</h2>
+      <div style="overflow-x:auto;">
+        <table id="overviewTable"><thead><tr id="overviewHead"></tr></thead><tbody id="overviewBody"></tbody></table>
+      </div>
+      <p class="muted">E = 未提出。クリックすると該当のチーム別評価画面に移動します。</p>
+    </div>
+
+    <div id="tab-individual" class="card hidden">
+      <h2>個人一覧</h2>
+      <div id="individualList"></div>
+    </div>
+
+    <div id="tab-present" class="card hidden">
+      <h2>提示モード（学生に見せる画面）</h2>
+      <label>課題（授業日）</label>
+      <select id="presentAssignSel" onchange="loadPresentList()"></select>
+      <div id="presentGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-top:14px;"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="hint">
+  ビジネス開発論 授業支援システム（Google スプレッドシート連携）
+</footer>
+
+<div id="presentOverlay" class="present-overlay" style="display:none;">
+  <div class="pbar">
+    <button onclick="presentPrev()">&larr; 前へ</button>
+    <button onclick="closePresentOverlay()">閉じる ✕</button>
+    <button onclick="presentNext()">次へ &rarr;</button>
+  </div>
+  <img id="presentImg" src="">
+  <div class="pname" id="presentName"></div>
+</div>
+
+<script>
+/* =========================================================
+   設定：Google Apps Script のウェブアプリ URL をここに設定してください
+   デプロイ後に発行される「/exec」で終わる URL です。
+   ========================================================= */
+const API_URL = "https://script.google.com/macros/s/AKfycbwiMM998AqPDqaLkLvhe-Ld4twRxCzHToEMaVb_r5GN9emaRluHe8qyZLOnp4iOGd8Xog/exec";
+
+/* ---------------- 共通ユーティリティ ---------------- */
+
+let session = { role: null, teamNo: null, teamName: null, studentId: null, name: null, teacherName: null };
+let currentAssignmentCache = []; // チーム画面用
+let presentItems = []; let presentIndex = 0;
+
+function showView(id){
+  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  window.scrollTo(0,0);
+}
+
+function setMsg(elId, text, type){
+  const el = document.getElementById(elId);
+  el.textContent = text;
+  el.className = 'msg ' + (type || 'error');
+  el.style.display = text ? 'block' : 'none';
+}
+
+async function api(action, data){
+  if (!API_URL || API_URL.indexOf('PUT_YOUR') === 0){
+    alert('API_URL が設定されていません。index.html 冒頭の API_URL を、デプロイした Google Apps Script のウェブアプリURLに書き換えてください。');
+    throw new Error('API_URL not configured');
+  }
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify(Object.assign({ action: action }, data || {}))
+  });
+  const json = await res.json();
+  return json;
+}
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function updateTopbar(){
+  const el = document.getElementById('topbarRight');
+  if (session.role === 'team'){
+    el.innerHTML = '第' + session.teamNo + '班「' + escapeHtml(session.teamName) + '」でログイン中 <button onclick="logout()">ログアウト</button>';
+  } else if (session.role === 'student'){
+    el.innerHTML = escapeHtml(session.name) + 'さん（' + escapeHtml(session.studentId) + '）でログイン中 <button onclick="logout()">ログアウト</button>';
+  } else if (session.role === 'teacher'){
+    el.innerHTML = escapeHtml(session.teacherName) + ' 先生でログイン中 <button onclick="logout()">ログアウト</button>';
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+function logout(){
+  session = { role: null, teamNo: null, teamName: null, studentId: null, name: null, teacherName: null };
+  updateTopbar();
+  showView('view-home');
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function todayIso(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* ---------------- チーム新規登録 ---------------- */
+
+function renderRegMembers(){
+  const wrap = document.getElementById('regMembers');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 5; i++){
+    const req = i === 0;
+    wrap.innerHTML += `
+      <div class="member-row">
+        <strong>${i+1}人目${req ? '（必須）' : '（任意）'}</strong>
+        <div class="row">
+          <div><label>学籍番号</label><input type="text" id="regSid_${i}"></div>
+          <div><label>氏名</label><input type="text" id="regName_${i}"></div>
+        </div>
+        <div class="row">
+          <div><label>連絡用メールアドレス</label><input type="email" id="regEmail_${i}"></div>
+          <div><label>個人画面用パスワード</label><input type="password" id="regPw_${i}"></div>
+        </div>
+      </div>`;
+  }
+}
+renderRegMembers();
+
+async function submitTeamRegister(){
+  const teamName = document.getElementById('regTeamName').value.trim();
+  const members = [];
+  for (let i = 0; i < 5; i++){
+    const sid = document.getElementById('regSid_'+i).value.trim();
+    const name = document.getElementById('regName_'+i).value.trim();
+    const email = document.getElementById('regEmail_'+i).value.trim();
+    const pw = document.getElementById('regPw_'+i).value;
+    if (!sid && !name && !pw) continue;
+    members.push({ studentId: sid, name: name, email: email, password: pw });
+  }
+  if (!teamName){ setMsg('regMsg','チーム名を入力してください。'); return; }
+  if (!members.length){ setMsg('regMsg','少なくとも1人のメンバーを入力してください。'); return; }
+
+  setMsg('regMsg','');
+  const res = await api('registerTeam', { teamName, members });
+  if (!res.ok){ setMsg('regMsg', res.error); return; }
+
+  document.getElementById('regForm').style.display = 'none';
+  document.getElementById('regResult').style.display = 'block';
+  document.getElementById('resTeamNo').textContent = res.teamNo;
+  document.getElementById('resTeamPassword').textContent = res.teamPassword;
+  window._lastRegTeamNo = res.teamNo;
+}
+
+function goToTeamLoginFromReg(){
+  document.getElementById('teamLoginNo').value = window._lastRegTeamNo || '';
+  document.getElementById('regForm').style.display = 'block';
+  document.getElementById('regResult').style.display = 'none';
+  showView('view-team-login');
+}
+
+/* ---------------- チームログイン／ホーム ---------------- */
+
+async function doTeamLogin(){
+  const teamNo = document.getElementById('teamLoginNo').value.trim();
+  const teamPassword = document.getElementById('teamLoginPw').value;
+  setMsg('teamLoginMsg','');
+  const res = await api('teamLogin', { teamNo, teamPassword });
+  if (!res.ok){ setMsg('teamLoginMsg', res.error); return; }
+  session = { role: 'team', teamNo: res.teamNo, teamName: res.teamName, members: res.members };
+  updateTopbar();
+  document.getElementById('teamHomeTitle').textContent = '第' + res.teamNo + '班「' + res.teamName + '」';
+  await loadTeamAssignments();
+  showView('view-team-home');
+}
+
+async function loadTeamAssignments(){
+  const res = await api('listAssignmentsForTeam', { teamNo: session.teamNo });
+  if (!res.ok) return;
+  currentAssignmentCache = res.assignments;
+  const wrap = document.getElementById('teamAssignList');
+  if (!res.assignments.length){ wrap.innerHTML = '<p class="muted">まだ課題が登録されていません。</p>'; return; }
+  wrap.innerHTML = res.assignments.map((a, idx) => `
+    <div class="assign-item" onclick="openTeamAssignment(${idx})">
+      <div class="top">
+        <strong>${escapeHtml(a.date)}</strong>
+        <span class="badge ${a.submitted ? 'done' : 'todo'}">${a.submitted ? '提出済み' : '未提出'}</span>
+      </div>
+      <div class="muted">${escapeHtml((a.textPrompt||'').slice(0,60))}</div>
+    </div>
+  `).join('');
+}
+
+function openTeamAssignment(idx){
+  const a = currentAssignmentCache[idx];
+  window._currentAssignment = a;
+  document.getElementById('taDate').textContent = a.date + ' の課題';
+  document.getElementById('taPrompts').innerHTML =
+    (a.textPrompt ? '<div><strong>問い（テキスト）：</strong>' + escapeHtml(a.textPrompt) + '</div>' : '') +
+    (a.filePrompt ? '<div><strong>問い（ファイル）：</strong>' + escapeHtml(a.filePrompt) + '</div>' : '');
+  setMsg('taMsg','');
+  document.getElementById('taPastNotice').style.display = a.submitted ? 'block' : 'none';
+  document.getElementById('taTeacherComment').textContent = a.teacherComment || '（まだありません）';
+  document.getElementById('taText').value = a.submission ? (a.submission.textContent || '') : '';
+  document.getElementById('taFile').value = '';
+  document.getElementById('taExistingImg').innerHTML = (a.submission && a.submission.fileUrl)
+    ? '<p class="muted">現在の添付画像：</p><img class="thumb" src="' + a.submission.fileUrl + '">' : '';
+
+  const members = session.members || [];
+  const peerEvals = a.peerEvals || [];
+  document.getElementById('taPeerEvals').innerHTML = members.map(m => {
+    const pe = peerEvals.find(p => String(p.studentId) === String(m.studentId));
+    return `
+      <div class="member-row">
+        <strong>${escapeHtml(m.name)}（${escapeHtml(m.studentId)}）</strong>
+        <label>貢献内容</label>
+        <textarea id="pe_text_${m.studentId}">${escapeHtml(pe ? pe.contributionText : '')}</textarea>
+        <label>貢献度（0〜10）</label>
+        <input type="number" min="0" max="10" id="pe_score_${m.studentId}" value="${pe ? pe.score : ''}">
+      </div>`;
+  }).join('');
+
+  showView('view-team-assignment');
+}
+
+async function submitAssignmentForm(){
+  const a = window._currentAssignment;
+  const textContent = document.getElementById('taText').value;
+  const fileInput = document.getElementById('taFile');
+  const members = session.members || [];
+
+  const peerEvals = members.map(m => ({
+    studentId: m.studentId,
+    contributionText: document.getElementById('pe_text_'+m.studentId).value,
+    score: document.getElementById('pe_score_'+m.studentId).value
+  }));
+
+  const payload = {
+    assignmentId: a.assignmentId,
+    teamNo: session.teamNo,
+    textContent: textContent,
+    peerEvals: peerEvals
+  };
+
+  if (fileInput.files && fileInput.files[0]){
+    const b64 = await fileToBase64(fileInput.files[0]);
+    payload.fileBase64 = b64;
+    payload.fileName = fileInput.files[0].name;
+  }
+
+  setMsg('taMsg','送信中...', 'success');
+  const res = await api('submitAssignment', payload);
+  if (!res.ok){ setMsg('taMsg', res.error); return; }
+  setMsg('taMsg','提出しました。', 'success');
+  await loadTeamAssignments();
+}
+
+/* ---------------- 個人ログイン／ホーム ---------------- */
+
+async function doStudentLogin(){
+  const studentId = document.getElementById('studentLoginId').value.trim();
+  const password = document.getElementById('studentLoginPw').value;
+  setMsg('studentLoginMsg','');
+  const res = await api('studentLogin', { studentId, password });
+  if (!res.ok){ setMsg('studentLoginMsg', res.error); return; }
+  session = { role: 'student', studentId: res.studentId, name: res.name, teamNo: res.teamNo, teamName: res.teamName };
+  updateTopbar();
+  document.getElementById('studentHomeTitle').textContent = res.name + 'さん（第' + res.teamNo + '班）';
+  document.getElementById('studentHomeDate').textContent = '本日：' + todayIso();
+  await loadStudentToday();
+  await loadStudentHistory();
+  showView('view-student-home');
+}
+
+async function loadStudentToday(){
+  const res = await api('studentToday', { studentId: session.studentId, date: todayIso() });
+  if (!res.ok) return;
+  if (res.checkin){
+    document.getElementById('checkinText').value = res.checkin.goal_text;
+    document.getElementById('checkinStatus').textContent = '本日 ' + res.checkin.timestamp + ' にチェックイン済み（再送信で上書きされます）';
+  } else {
+    document.getElementById('checkinStatus').textContent = '本日はまだチェックインしていません。';
+  }
+  if (res.checkout){
+    document.getElementById('checkoutContrib').value = res.checkout.contribution_text;
+    document.getElementById('checkoutPrep').value = res.checkout.prep_text;
+    document.getElementById('checkoutStatus').textContent = '本日 ' + res.checkout.timestamp + ' にチェックアウト済み（再送信で上書きされます）';
+  } else {
+    document.getElementById('checkoutStatus').textContent = '本日はまだチェックアウトしていません。';
+  }
+}
+
+async function submitCheckin(){
+  const goalText = document.getElementById('checkinText').value.trim();
+  if (!goalText){ setMsg('studentMsg','目標を入力してください。'); return; }
+  const res = await api('checkin', { studentId: session.studentId, goalText, date: todayIso() });
+  if (!res.ok){ setMsg('studentMsg', res.error); return; }
+  setMsg('studentMsg','チェックインしました。', 'success');
+  await loadStudentToday(); await loadStudentHistory();
+}
+
+async function submitCheckout(){
+  const contributionText = document.getElementById('checkoutContrib').value.trim();
+  const prepText = document.getElementById('checkoutPrep').value.trim();
+  const res = await api('checkout', { studentId: session.studentId, contributionText, prepText, date: todayIso() });
+  if (!res.ok){ setMsg('studentMsg', res.error); return; }
+  setMsg('studentMsg','チェックアウトしました。', 'success');
+  await loadStudentToday(); await loadStudentHistory();
+}
+
+async function loadStudentHistory(){
+  const res = await api('studentHistory', { studentId: session.studentId });
+  const el = document.getElementById('studentHistory');
+  if (!res.ok){ el.textContent = '取得に失敗しました。'; return; }
+  if (!res.checkins.length && !res.checkouts.length){ el.textContent = 'まだ記録がありません。'; return; }
+  let html = '<table><thead><tr><th>日付</th><th>チェックイン（目標）</th><th>チェックアウト（貢献／準備）</th></tr></thead><tbody>';
+  const dates = Array.from(new Set(res.checkins.map(c=>c.date).concat(res.checkouts.map(c=>c.date)))).sort().reverse();
+  dates.forEach(d => {
+    const ci = res.checkins.find(c=>c.date===d);
+    const co = res.checkouts.find(c=>c.date===d);
+    html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+
+      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+/* ---------------- 教員ログイン ---------------- */
+
+async function doTeacherLogin(){
+  const teacherName = document.getElementById('teacherLoginName').value;
+  const password = document.getElementById('teacherLoginPw').value;
+  setMsg('teacherLoginMsg','');
+  const res = await api('teacherLogin', { teacherName, password });
+  if (!res.ok){ setMsg('teacherLoginMsg', res.error); return; }
+  session = { role: 'teacher', teacherName: res.teacherName };
+  updateTopbar();
+  await refreshAssignSelectors();
+  teacherTab('assign');
+  await loadTeacherAssignmentList();
+  showView('view-teacher-home');
+}
+
+function teacherTab(name){
+  ['assign','review','overview','individual','present'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
+    document.getElementById('tab-btn-'+t).classList.toggle('active', t === name);
+  });
+  if (name === 'overview') loadTeacherOverview();
+  if (name === 'individual') loadTeacherIndividual();
+  if (name === 'review') loadTeamReview();
+  if (name === 'present') loadPresentList();
+}
+
+/* --- 課題管理 --- */
+
+async function submitTeacherAssignment(){
+  const date = document.getElementById('assignDate').value;
+  const textPrompt = document.getElementById('assignTextPrompt').value;
+  const filePrompt = document.getElementById('assignFilePrompt').value;
+  if (!date){ setMsg('assignMsg','授業日を選択してください。'); return; }
+  const res = await api('teacherCreateAssignment', { date, textPrompt, filePrompt });
+  if (!res.ok){ setMsg('assignMsg', res.error); return; }
+  setMsg('assignMsg','保存しました。', 'success');
+  await loadTeacherAssignmentList();
+  await refreshAssignSelectors();
+}
+
+async function loadTeacherAssignmentList(){
+  const res = await api('teacherListAssignments', {});
+  if (!res.ok) return;
+  document.getElementById('assignListBody').innerHTML = res.assignments.map(a => `
+    <tr>
+      <td>${escapeHtml(a.date)}</td>
+      <td>${escapeHtml(a.text_prompt)}</td>
+      <td>${escapeHtml(a.file_prompt)}</td>
+      <td><button class="link-btn" onclick="editAssignment('${a.date}','${encodeURIComponent(a.text_prompt)}','${encodeURIComponent(a.file_prompt)}')">編集</button></td>
+    </tr>`).join('');
+}
+
+function editAssignment(date, textPrompt, filePrompt){
+  document.getElementById('assignDate').value = date;
+  document.getElementById('assignTextPrompt').value = decodeURIComponent(textPrompt);
+  document.getElementById('assignFilePrompt').value = decodeURIComponent(filePrompt);
+  window.scrollTo(0,0);
+}
+
+async function refreshAssignSelectors(){
+  const res = await api('teacherListAssignments', {});
+  if (!res.ok) return;
+  const opts = res.assignments.map(a => `<option value="${a.assignment_id}">${escapeHtml(a.date)}</option>`).join('');
+  document.getElementById('reviewAssignSel').innerHTML = opts;
+  document.getElementById('presentAssignSel').innerHTML = opts;
+
+  const teamsRes = await api('teacherOverview', {});
+  if (teamsRes.ok){
+    document.getElementById('reviewTeamSel').innerHTML = teamsRes.matrix.map(t =>
+      `<option value="${t.teamNo}">第${t.teamNo}班 ${escapeHtml(t.teamName)}</option>`).join('');
+  }
+}
+
+/* --- チーム別確認・評価 --- */
+
+async function loadTeamReview(){
+  const assignmentId = document.getElementById('reviewAssignSel').value;
+  const teamNo = document.getElementById('reviewTeamSel').value;
+  const body = document.getElementById('reviewBody');
+  if (!assignmentId || !teamNo){ body.innerHTML = '課題とチームを選択してください。'; return; }
+
+  const res = await api('teacherTeamSubmission', { assignmentId, teamNo });
+  if (!res.ok){ body.innerHTML = escapeHtml(res.error); return; }
+  const sub = res.submission;
+  const ev = res.evaluation;
+
+  let html = '';
+  if (!sub){
+    html += '<p class="muted">この課題は未提出です（評価：E）。</p>';
+  } else {
+    html += '<h3>提出内容</h3>';
+    html += '<p style="white-space:pre-wrap;">' + escapeHtml(sub.text_content) + '</p>';
+    if (sub.file_url) html += '<img class="thumb" src="'+sub.file_url+'">';
+    html += '<p class="muted">提出者：'+escapeHtml(sub.submitted_by)+' ／ 提出日時：'+escapeHtml(sub.submitted_at)+'</p>';
+  }
+
+  html += '<h3>チーム代表者によるメンバー貢献評価</h3>';
+  html += '<table><thead><tr><th>氏名</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>';
+  res.members.forEach(m => {
+    html += '<tr><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.contributionText)+'</td><td>'+escapeHtml(String(m.score))+'</td></tr>';
+  });
+  html += '</tbody></table>';
+
+  html += `
+    <h3>教員評価</h3>
+    <label>評価</label>
+    <select id="teacherGrade">
+      ${['S','A','B','C','D','E'].map(g => `<option value="${g}" ${ev && ev.grade===g ? 'selected':''}>${g}</option>`).join('')}
+    </select>
+    <label>コメント（学生に表示されます）</label>
+    <textarea id="teacherComment">${ev ? escapeHtml(ev.comment) : ''}</textarea>
+    <button class="btn" onclick="saveTeacherEvaluation()">評価を保存</button>
+    <div id="evalMsg" class="msg"></div>
+  `;
+  body.innerHTML = html;
+}
+
+async function saveTeacherEvaluation(){
+  const assignmentId = document.getElementById('reviewAssignSel').value;
+  const teamNo = document.getElementById('reviewTeamSel').value;
+  const grade = document.getElementById('teacherGrade').value;
+  const comment = document.getElementById('teacherComment').value;
+  const res = await api('teacherSetEvaluation', { assignmentId, teamNo, grade, comment, teacherName: session.teacherName });
+  if (!res.ok){ setMsg('evalMsg', res.error); return; }
+  setMsg('evalMsg','保存しました。', 'success');
+}
+
+/* --- 全体一覧 --- */
+
+async function loadTeacherOverview(){
+  const res = await api('teacherOverview', {});
+  if (!res.ok) return;
+  document.getElementById('overviewHead').innerHTML =
+    '<th>班</th>' + res.assignmentDates.map(a => '<th>'+escapeHtml(a.date)+'</th>').join('');
+  document.getElementById('overviewBody').innerHTML = res.matrix.map(row => {
+    const cells = row.cells.map(c => {
+      const g = c.grade || (c.submitted ? '' : 'E');
+      const cls = g ? 'grade-pill g'+g : '';
+      return `<td style="cursor:pointer" onclick="jumpToReview('${c.assignmentId}','${row.teamNo}')">${g ? '<span class="'+cls+'">'+g+'</span>' : (c.submitted ? '提出済' : '')}</td>`;
+    }).join('');
+    return '<tr><td>第'+row.teamNo+'班<br><span class="muted">'+escapeHtml(row.teamName)+'</span></td>'+cells+'</tr>';
+  }).join('');
+}
+
+function jumpToReview(assignmentId, teamNo){
+  teacherTab('review');
+  document.getElementById('reviewAssignSel').value = assignmentId;
+  document.getElementById('reviewTeamSel').value = teamNo;
+  loadTeamReview();
+}
+
+/* --- 個人一覧 --- */
+
+async function loadTeacherIndividual(){
+  const res = await api('teacherIndividualOverview', {});
+  const wrap = document.getElementById('individualList');
+  if (!res.ok){ wrap.textContent = res.error; return; }
+  wrap.innerHTML = res.students.map(s => {
+    const evalRows = s.peerEvals.map(e => `<tr><td>${escapeHtml(e.assignmentId)}</td><td>${escapeHtml(e.contributionText)}</td><td>${escapeHtml(String(e.score))}</td></tr>`).join('');
+    const ciRows = s.checkins.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.goalText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
+    const coRows = s.checkouts.map(c => `<tr><td>${escapeHtml(c.date)}</td><td>${escapeHtml(c.contributionText)}</td><td>${escapeHtml(c.prepText)}</td><td>${escapeHtml(c.timestamp)}</td></tr>`).join('');
+    return `
+      <div class="card" style="background:#fafbfd;">
+        <strong>${escapeHtml(s.name)}（${escapeHtml(s.studentId)} ／ 第${escapeHtml(String(s.teamNo))}班）</strong>
+        <h3>チーム代表者による貢献評価</h3>
+        <table><thead><tr><th>課題日</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>${evalRows || '<tr><td colspan=3 class="muted">記録なし</td></tr>'}</tbody></table>
+        <h3>チェックイン履歴</h3>
+        <table><thead><tr><th>日付</th><th>目標</th><th>時刻</th></tr></thead><tbody>${ciRows || '<tr><td colspan=3 class="muted">記録なし</td></tr>'}</tbody></table>
+        <h3>チェックアウト履歴</h3>
+        <table><thead><tr><th>日付</th><th>貢献できたこと</th><th>次回への準備</th><th>時刻</th></tr></thead><tbody>${coRows || '<tr><td colspan=4 class="muted">記録なし</td></tr>'}</tbody></table>
+      </div>`;
+  }).join('');
+}
+
+/* --- 提示モード --- */
+
+async function loadPresentList(){
+  const assignmentId = document.getElementById('presentAssignSel').value;
+  const grid = document.getElementById('presentGrid');
+  if (!assignmentId){ grid.innerHTML = ''; return; }
+  const res = await api('teacherPresentationList', { assignmentId });
+  if (!res.ok){ grid.innerHTML = escapeHtml(res.error); return; }
+  presentItems = res.items;
+  if (!presentItems.length){ grid.innerHTML = '<p class="muted">この課題には画像の提出がありません。</p>'; return; }
+  grid.innerHTML = presentItems.map((item, idx) => `
+    <div style="cursor:pointer;text-align:center;" onclick="openPresentOverlay(${idx})">
+      <img src="${item.fileUrl}" style="width:100%;border-radius:8px;border:1px solid var(--border);">
+      <div class="muted">第${item.teamNo}班</div>
+    </div>`).join('');
+}
+
+function openPresentOverlay(idx){
+  presentIndex = idx;
+  showPresentAt(idx);
+  document.getElementById('presentOverlay').style.display = 'flex';
+}
+function showPresentAt(idx){
+  const item = presentItems[idx];
+  document.getElementById('presentImg').src = item.fileUrl;
+  document.getElementById('presentName').textContent = '第' + item.teamNo + '班';
+}
+function presentNext(){ presentIndex = (presentIndex+1) % presentItems.length; showPresentAt(presentIndex); }
+function presentPrev(){ presentIndex = (presentIndex-1+presentItems.length) % presentItems.length; showPresentAt(presentIndex); }
+function closePresentOverlay(){ document.getElementById('presentOverlay').style.display = 'none'; }
+
+/* ---------------- 初期表示 ---------------- */
+document.getElementById('assignDate').value = todayIso();
+showView('view-home');
+</script>
+</body>
+</html>
