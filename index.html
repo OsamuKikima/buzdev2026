@@ -722,14 +722,21 @@ async function loadStudentToday(){
     document.getElementById('checkinStatus').textContent = '本日はまだチェックインしていません。';
     document.getElementById('checkinBtn').textContent = 'チェックインを送信';
   }
+  const checkoutBtn = document.getElementById('checkoutBtn');
   if (res.checkout){
     document.getElementById('checkoutContrib').value = res.checkout.contribution_text;
     document.getElementById('checkoutPrep').value = res.checkout.prep_text;
     document.getElementById('checkoutStatus').textContent = '本日 ' + res.checkout.timestamp + ' にチェックアウト済み';
-    document.getElementById('checkoutBtn').textContent = 'チェックアウトを更新';
+    checkoutBtn.textContent = 'チェックアウトを更新';
+    checkoutBtn.disabled = false;
+  } else if (!res.checkin){
+    document.getElementById('checkoutStatus').textContent = '先にチェックインを行うと、チェックアウトできるようになります。';
+    checkoutBtn.textContent = 'チェックアウトを送信';
+    checkoutBtn.disabled = true;
   } else {
     document.getElementById('checkoutStatus').textContent = '本日はまだチェックアウトしていません。';
-    document.getElementById('checkoutBtn').textContent = 'チェックアウトを送信';
+    checkoutBtn.textContent = 'チェックアウトを送信';
+    checkoutBtn.disabled = false;
   }
 }
 
@@ -743,6 +750,9 @@ async function submitCheckin(){
 }
 
 async function submitCheckout(){
+  if (document.getElementById('checkoutBtn').disabled){
+    setMsg('studentMsg','先にチェックインを行ってください。'); return;
+  }
   const contributionText = document.getElementById('checkoutContrib').value.trim();
   const prepText = document.getElementById('checkoutPrep').value.trim();
   const res = await api('checkout', { studentId: session.studentId, contributionText, prepText, date: todayIso() });
@@ -756,13 +766,13 @@ async function loadStudentHistory(){
   const el = document.getElementById('studentHistory');
   if (!res.ok){ el.textContent = '取得に失敗しました。'; return; }
   if (!res.checkins.length && !res.checkouts.length){ el.textContent = 'まだ記録がありません。'; return; }
-  let html = '<table><thead><tr><th>日付</th><th>チェックイン（目標）</th><th>チェックアウト（貢献／準備）</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>日付</th><th>チェックイン（目標）</th><th>チェックイン時刻</th><th>チェックアウト（貢献／準備）</th><th>チェックアウト時刻</th></tr></thead><tbody>';
   const dates = Array.from(new Set(res.checkins.map(c=>c.date).concat(res.checkouts.map(c=>c.date)))).sort().reverse();
   dates.forEach(d => {
     const ci = res.checkins.find(c=>c.date===d);
     const co = res.checkouts.find(c=>c.date===d);
-    html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+
-      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td></tr>';
+    html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+escapeHtml(ci?ci.timestamp:'')+'</td><td>'+
+      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td><td>'+escapeHtml(co?co.timestamp:'')+'</td></tr>';
   });
   html += '</tbody></table>';
   el.innerHTML = html;
