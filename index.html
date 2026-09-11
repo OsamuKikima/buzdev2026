@@ -218,7 +218,9 @@
       <div id="taQuestions"></div>
 
       <h3>チームメンバーの貢献評価（チーム代表者が入力）</h3>
-      <p class="muted">この日の課題全体について、各メンバーの貢献内容と貢献度（10点満点）を入力してください。</p>
+      <label>記入者</label>
+      <select id="taRecorderSelect"></select>
+      <p class="muted">この日の課題について、各メンバーの関わり方（何をしたか）と貢献度（10点満点：6点が標準的な貢献）を入力してください。</p>
       <div id="taPeerEvals"></div>
 
       <button class="btn" id="taSubmitBtn" onclick="submitAssignmentForm()">提出する</button>
@@ -595,6 +597,14 @@ function openTeamDateGroup(date){
   // メンバー貢献評価は日の課題全体で1回入力する（いずれかの問いに既存の評価があれば読み込む）
   const members = session.members || [];
   const existingPeerEvals = (items.find(a => (a.peerEvals || []).length) || {}).peerEvals || [];
+
+  // 記入者（誰がこの貢献評価を入力したか）：既存の提出があれば、その提出者を初期選択する
+  const existingSubmittedBy = (items.find(a => a.submission && a.submission.submittedBy) || {}).submission || {};
+  document.getElementById('taRecorderSelect').innerHTML =
+    '<option value="">選択してください</option>' +
+    members.map(m => '<option value="' + escapeHtml(m.studentId) + '">' + escapeHtml(m.name) + '（' + escapeHtml(m.studentId) + '）</option>').join('');
+  document.getElementById('taRecorderSelect').value = existingSubmittedBy.submittedBy || '';
+
   document.getElementById('taPeerEvals').innerHTML = members.map(m => {
     const pe = existingPeerEvals.find(p => String(p.studentId) === String(m.studentId));
     return `
@@ -615,6 +625,9 @@ async function submitAssignmentForm(){
   const members = session.members || [];
   const wasAllSubmitted = items.every(a => a.submitted);
 
+  const recorderId = document.getElementById('taRecorderSelect').value;
+  if (!recorderId){ setMsg('taMsg', '記入者を選択してください。'); return; }
+
   const peerEvals = members.map(m => ({
     studentId: m.studentId,
     contributionText: document.getElementById('pe_text_'+m.studentId).value,
@@ -623,7 +636,7 @@ async function submitAssignmentForm(){
 
   setMsg('taMsg','送信中...', 'success');
   for (const a of items){
-    const payload = { assignmentId: a.assignmentId, teamNo: session.teamNo, peerEvals: peerEvals };
+    const payload = { assignmentId: a.assignmentId, teamNo: session.teamNo, studentId: recorderId, peerEvals: peerEvals };
     const textEl = document.getElementById('taText_'+a.assignmentId);
     if (textEl) payload.textContent = textEl.value;
     const fileEl = document.getElementById('taFile_'+a.assignmentId);
