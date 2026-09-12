@@ -201,6 +201,7 @@
   <section id="view-team-home" class="view hidden">
     <div class="card">
       <h2 id="teamHomeTitle"></h2>
+      <p class="muted" id="teamHomeLeader"></p>
       <p class="muted">下の一覧から課題を選んで提出・確認できます。</p>
       <div id="teamAssignList"></div>
     </div>
@@ -474,6 +475,7 @@ function renderRegMembers(){
         <div class="row">
           <div><label>個人画面用パスワード</label><input type="password" id="regPw_${i}"></div>
         </div>
+        <label><input type="radio" name="regLeader" id="regLeader_${i}" value="${i}" ${i===0 ? 'checked' : ''}> このメンバーをチーム代表者にする</label>
       </div>`;
   }
 }
@@ -484,6 +486,7 @@ function isHalfWidthAlnum(s){ return /^[0-9A-Za-z]+$/.test(s); }
 async function submitTeamRegister(){
   const teamName = document.getElementById('regTeamName').value.trim();
   const members = [];
+  let leaderStudentId = '';
   for (let i = 0; i < 5; i++){
     const sid = document.getElementById('regSid_'+i).value.trim();
     const name = document.getElementById('regName_'+i).value.trim();
@@ -491,12 +494,15 @@ async function submitTeamRegister(){
     if (!sid && !name && !pw) continue;
     if (!isHalfWidthAlnum(sid)){ setMsg('regMsg', (i+1)+'人目：学籍番号は半角英数字で入力してください（例：20CB001）。'); return; }
     members.push({ studentId: sid, name: name, password: pw });
+    const radio = document.getElementById('regLeader_'+i);
+    if (radio && radio.checked) leaderStudentId = sid;
   }
   if (!teamName){ setMsg('regMsg','チーム名を入力してください。'); return; }
   if (!members.length){ setMsg('regMsg','少なくとも1人のメンバーを入力してください。'); return; }
+  if (!leaderStudentId) leaderStudentId = members[0].studentId; // 代表者に選ばれた行が未入力だった場合は1人目にする
 
   setMsg('regMsg','');
-  const res = await api('registerTeam', { teamName, members });
+  const res = await api('registerTeam', { teamName, members, leaderStudentId });
   if (!res.ok){ setMsg('regMsg', res.error); return; }
 
   document.getElementById('regForm').style.display = 'none';
@@ -521,9 +527,11 @@ async function doTeamLogin(){
   setMsg('teamLoginMsg','');
   const res = await api('teamLogin', { teamNo, teamPassword });
   if (!res.ok){ setMsg('teamLoginMsg', res.error); return; }
-  session = { role: 'team', teamNo: res.teamNo, teamName: res.teamName, members: res.members };
+  session = { role: 'team', teamNo: res.teamNo, teamName: res.teamName, members: res.members, leaderStudentId: res.leaderStudentId || '' };
   updateTopbar();
   document.getElementById('teamHomeTitle').textContent = '第' + res.teamNo + '班「' + res.teamName + '」';
+  const leaderMember = (res.members || []).find(m => m.studentId === res.leaderStudentId);
+  document.getElementById('teamHomeLeader').textContent = leaderMember ? ('代表者：' + leaderMember.name) : '';
   await loadTeamAssignments();
   showView('view-team-home');
 }
@@ -580,9 +588,12 @@ function openTeamDateGroup(date){
     const label = items.length > 1 ? '問' + (i + 1) : '課題';
     const promptsHtml =
       (a.textPrompt ? '<div><strong>問い（テキスト）：</strong>' + escapeHtml(a.textPrompt) + '</div>' : '') +
-      (a.filePrompt ? '<div><strong>問い（ファイル）：</strong>' + escapeHtml(a.filePrompt) + '</div>' : '');
+      (a.filePrompt ? '<div><strong>問い（ファイル）：</strong>' + escapeHtml(a.filePrompt) + '</div>' : '') +
+      (a.slidePrompt ? '<div><strong>問い（スライドのアップ）：</strong>' + escapeHtml(a.slidePrompt) + '</div>' : '');
     const existingImg = (a.submission && a.submission.fileUrl)
       ? '<p class="muted">現在の添付画像：</p><img class="thumb" src="' + a.submission.fileUrl + '">' : '';
+    const existingSlide = (a.submission && a.submission.slideViewUrl)
+      ? '<p class="muted">現在のスライド：<a href="' + a.submission.slideViewUrl + '" target="_blank">' + (a.submission.slideFileName ? 'ファイルを開く（' + escapeHtml(a.submission.slideFileName) + '）' : 'リンクを開く') + '</a></p>' : '';
     return `
       <div class="member-row" data-assignment-id="${a.assignmentId}">
         <strong>${escapeHtml(label)}</strong>
@@ -595,6 +606,12 @@ function openTeamDateGroup(date){
         <label>画像ファイル添付</label>
         <input type="file" id="taFile_${a.assignmentId}" accept="image/*">
         ${existingImg}` : ''}
+        ${a.slidePrompt ? `
+        <label>スライドファイル添付（PowerPoint・PDFなど）</label>
+        <input type="file" id="taSlide_${a.assignmentId}" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+        <p class="muted">またはURLを貼り付け（Canvaなど、ファイルとして添付できない場合）</p>
+        <input type="text" id="taSlideUrl_${a.assignmentId}" placeholder="例）https://www.canva.com/design/...">
+        ${existingSlide}` : ''}
       </div>`;
   }).join('');
 
@@ -647,6 +664,15 @@ async function submitAssignmentForm(){
     if (fileEl && fileEl.files && fileEl.files[0]){
       payload.fileBase64 = await fileToBase64(fileEl.files[0]);
       payload.fileName = fileEl.files[0].name;
+    }
+    const slideEl = document.getElementById('taSlide_'+a.assignmentId);
+    const slideUrlEl = document.getElementById('taSlideUrl_'+a.assignmentId);
+    if (slideEl && slideEl.files && slideEl.files[0]){
+      payload.slideBase64 = await fileToBase64(slideEl.files[0]);
+      payload.slideFileName = slideEl.files[0].name;
+    } else if (slideUrlEl && slideUrlEl.value.trim()){
+      // ファイルを添付していない場合のみ、URL（Canvaなど）を送る
+      payload.slideExternalUrl = slideUrlEl.value.trim();
     }
     const res = await api('submitAssignment', payload);
     if (!res.ok){ setMsg('taMsg', res.error); return; }
@@ -1027,6 +1053,8 @@ async function openAssignmentTab(){
       <textarea id="assignTextPrompt"></textarea>
       <label>問い（ファイル）</label>
       <textarea id="assignFilePrompt" placeholder="例）本日のワークで作成した写真を添付してください"></textarea>
+      <label>問い（スライドのアップ）</label>
+      <textarea id="assignSlidePrompt" placeholder="例）本日作成したスライド（PowerPoint・PDFなど）を提出してください"></textarea>
       <button class="btn" id="assignSaveBtn" onclick="submitTeacherAssignment()">追加する</button>
       <button class="btn secondary" id="assignCancelBtn" style="display:none;" onclick="cancelEditAssignment()">新規登録に戻す</button>
     </div>
@@ -1051,7 +1079,7 @@ async function openAssignmentTab(){
           lastDate = a.date;
         }
         const label = countByDate[a.date] > 1 ? ('問' + labelOf[a.assignment_id] + '：') : '';
-        const promptSummary = [a.text_prompt ? 'テキスト：' + a.text_prompt : '', a.file_prompt ? 'ファイル：' + a.file_prompt : '']
+        const promptSummary = [a.text_prompt ? 'テキスト：' + a.text_prompt : '', a.file_prompt ? 'ファイル：' + a.file_prompt : '', a.slide_prompt ? 'スライド：' + a.slide_prompt : '']
           .filter(Boolean).join(' ／ ');
         rowsHtml += '<tr><td></td><td>' + escapeHtml(label) + escapeHtml(promptSummary) + '</td><td>'
           + '<button class="link-btn" data-action="edit" data-id="' + a.assignment_id + '">編集</button>'
@@ -1080,8 +1108,9 @@ async function openAssignmentTab(){
       const date = document.getElementById('assignDate').value;
       const textPrompt = document.getElementById('assignTextPrompt').value;
       const filePrompt = document.getElementById('assignFilePrompt').value;
+      const slidePrompt = document.getElementById('assignSlidePrompt').value;
       if (!date){ setMsg('assignMsg','授業日を選択してください。'); return; }
-      const payload = { date: date, textPrompt: textPrompt, filePrompt: filePrompt };
+      const payload = { date: date, textPrompt: textPrompt, filePrompt: filePrompt, slidePrompt: slidePrompt };
       if (_editingAssignmentId) payload.assignmentId = _editingAssignmentId;
       const res = await api('teacherCreateAssignment', payload);
       if (!res.ok){ setMsg('assignMsg', res.error); return; }
@@ -1097,6 +1126,7 @@ async function openAssignmentTab(){
       document.getElementById('assignDate').value = a.date;
       document.getElementById('assignTextPrompt').value = a.text_prompt;
       document.getElementById('assignFilePrompt').value = a.file_prompt;
+      document.getElementById('assignSlidePrompt').value = a.slide_prompt || '';
       document.getElementById('assignFormTitle').textContent = '課題（問い）の編集';
       document.getElementById('assignSaveBtn').textContent = '更新する';
       document.getElementById('assignCancelBtn').style.display = 'inline-block';
@@ -1107,6 +1137,7 @@ async function openAssignmentTab(){
       _editingAssignmentId = null;
       document.getElementById('assignTextPrompt').value = '';
       document.getElementById('assignFilePrompt').value = '';
+      document.getElementById('assignSlidePrompt').value = '';
       document.getElementById('assignDate').value = todayIso();
       document.getElementById('assignFormTitle').textContent = '課題（問い）の新規登録';
       document.getElementById('assignSaveBtn').textContent = '追加する';
@@ -1166,7 +1197,7 @@ async function openReviewTab(){
       const labelOf = info.labelOf, countByDate = info.countByDate;
       const opts = ASSIGNMENTS.map(function(a){
         const qLabel = countByDate[a.date] > 1 ? ('（問' + labelOf[a.assignment_id] + '）') : '';
-        const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
+        const preview = [a.text_prompt, a.file_prompt, a.slide_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
         const label = a.date + qLabel + '：' + preview;
         return '<option value="' + a.assignment_id + '">' + escapeHtml(label) + '</option>';
       }).join('');
@@ -1194,6 +1225,7 @@ async function openReviewTab(){
         html += '<h3>提出内容</h3>';
         html += '<p style="white-space:pre-wrap;">' + escapeHtml(sub.text_content) + '</p>';
         if (sub.file_url) html += '<img class="thumb" src="' + sub.file_url + '">';
+        if (sub.slide_view_url) html += '<p><a href="' + sub.slide_view_url + '" target="_blank">' + (sub.slide_file_name ? 'ファイルを開く（' + escapeHtml(sub.slide_file_name) + '）' : 'リンクを開く') + '</a></p>';
         html += '<p class="muted">提出者：' + escapeHtml(sub.submitted_by) + ' ／ 投稿日：' + escapeHtml(sub.first_submitted_at || sub.submitted_at)
           + (sub.submitted_at && sub.submitted_at !== sub.first_submitted_at ? ' ／ 更新日：' + escapeHtml(sub.submitted_at) : '') + '</p>';
       }
@@ -1516,7 +1548,7 @@ async function openPresentationMenuTab(){
   const info = computeAssignmentLabels(res.assignments || []);
   const optsHtml = (res.assignments || []).map(a => {
     const qLabel = info.countByDate[a.date] > 1 ? ('（問' + info.labelOf[a.assignment_id] + '）') : '';
-    const preview = [a.text_prompt, a.file_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
+    const preview = [a.text_prompt, a.file_prompt, a.slide_prompt].filter(Boolean).join(' ／ ').slice(0, 30) || '（内容未設定）';
     const label = a.date + qLabel + '：' + preview;
     return '<option value="' + a.assignment_id + '">' + escapeHtml(label) + '</option>';
   }).join('');
@@ -1545,17 +1577,21 @@ async function openPresentationMenuTab(){
       wrap.innerHTML = buildPresentationBoardHtml(a, res.items);
       const textBtn = document.getElementById('tab-btn-text');
       const imageBtn = document.getElementById('tab-btn-image');
+      const slideBtn = document.getElementById('tab-btn-slide');
       if (textBtn) textBtn.addEventListener('click', function(){ showBoard('text'); });
       if (imageBtn) imageBtn.addEventListener('click', function(){ showBoard('image'); });
+      if (slideBtn) slideBtn.addEventListener('click', function(){ showBoard('slide'); });
     }
 
     function buildPresentationBoardHtml(a, items){
       const dateLabel = a ? escapeHtml(a.date) : '';
       const textPrompt = a && a.text_prompt ? escapeHtml(a.text_prompt) : '';
       const filePrompt = a && a.file_prompt ? escapeHtml(a.file_prompt) : '';
+      const slidePrompt = a && a.slide_prompt ? escapeHtml(a.slide_prompt) : '';
       const promptHtml = [
         textPrompt ? '<div class="prompt-line"><span class="tag">テキストの問い</span>' + textPrompt + '</div>' : '',
-        filePrompt ? '<div class="prompt-line"><span class="tag">ファイルの問い</span>' + filePrompt + '</div>' : ''
+        filePrompt ? '<div class="prompt-line"><span class="tag">ファイルの問い</span>' + filePrompt + '</div>' : '',
+        slidePrompt ? '<div class="prompt-line"><span class="tag">スライドのアップ</span>' + slidePrompt + '</div>' : ''
       ].filter(Boolean).join('');
 
       const textCards = items.map(function(it){
@@ -1573,33 +1609,56 @@ async function openPresentationMenuTab(){
           + '<img src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">' + commentHtml + '</div>';
       }).filter(Boolean).join('');
 
+      const slideCards = items.map(function(it){
+        if (!it.slideViewUrl) return '';
+        const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+        const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\\n/g,'<br>') + '</div>' : '';
+        const linkLabel = it.slideFileName ? 'ファイルを開く（' + escapeHtml(it.slideFileName) + '）' : 'リンクを開く';
+        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+          + '<p><a href="' + it.slideViewUrl + '" target="_blank">' + linkLabel + '</a></p>' + commentHtml + '</div>';
+      }).filter(Boolean).join('');
+
       const hasText = !!textCards;
       const hasImage = !!imageCards;
-      const showTabs = hasText && hasImage;
+      const hasSlide = !!slideCards;
+      const visibleCount = [hasText, hasImage, hasSlide].filter(Boolean).length;
+      const showTabs = visibleCount > 1;
 
-      const textBoardHtml = '<div id="board-text" class="board-wrap"' + (!hasText && hasImage ? ' style="display:none;"' : '') + '>'
+      // 最初に見つかった種類をデフォルト表示にする
+      const firstKind = hasText ? 'text' : (hasImage ? 'image' : 'slide');
+
+      const textBoardHtml = '<div id="board-text" class="board-wrap"' + (firstKind !== 'text' ? ' style="display:none;"' : '') + '>'
         + (hasText ? '<div class="board">' + textCards + '</div>' : '<p class="empty">この課題にはまだテキストの提出がありません。</p>')
         + '</div>';
-      const imageBoardHtml = '<div id="board-image" class="board-wrap"' + (hasText ? ' style="display:none;"' : '') + '>'
+      const imageBoardHtml = '<div id="board-image" class="board-wrap"' + (firstKind !== 'image' ? ' style="display:none;"' : '') + '>'
         + (hasImage ? '<div class="board">' + imageCards + '</div>' : '<p class="empty">この課題にはまだ画像の提出がありません。</p>')
+        + '</div>';
+      const slideBoardHtml = '<div id="board-slide" class="board-wrap"' + (firstKind !== 'slide' ? ' style="display:none;"' : '') + '>'
+        + (hasSlide ? '<div class="board">' + slideCards + '</div>' : '<p class="empty">この課題にはまだスライドの提出がありません。</p>')
         + '</div>';
 
       const tabsHtml = showTabs
-        ? '<div class="tabbar"><button id="tab-btn-text" type="button" class="tabbtn active">テキスト</button>'
-          + '<button id="tab-btn-image" type="button" class="tabbtn">画像</button></div>'
+        ? '<div class="tabbar">'
+          + '<button id="tab-btn-text" type="button" class="tabbtn' + (firstKind === 'text' ? ' active' : '') + '">テキスト</button>'
+          + '<button id="tab-btn-image" type="button" class="tabbtn' + (firstKind === 'image' ? ' active' : '') + '">画像</button>'
+          + '<button id="tab-btn-slide" type="button" class="tabbtn' + (firstKind === 'slide' ? ' active' : '') + '">スライド</button>'
+          + '</div>'
         : '';
 
       return '<div class="prompt-box"><h2 style="margin-top:0;">' + dateLabel + '</h2>' + promptHtml + '</div>'
-        + tabsHtml + textBoardHtml + imageBoardHtml;
+        + tabsHtml + textBoardHtml + imageBoardHtml + slideBoardHtml;
     }
 
     function showBoard(kind){
       const bt = document.getElementById('board-text');
       const bi = document.getElementById('board-image');
+      const bs = document.getElementById('board-slide');
       if (bt) bt.style.display = (kind === 'text') ? 'block' : 'none';
       if (bi) bi.style.display = (kind === 'image') ? 'block' : 'none';
+      if (bs) bs.style.display = (kind === 'slide') ? 'block' : 'none';
       const tt = document.getElementById('tab-btn-text'); if (tt) tt.classList.toggle('active', kind === 'text');
       const ti = document.getElementById('tab-btn-image'); if (ti) ti.classList.toggle('active', kind === 'image');
+      const ts = document.getElementById('tab-btn-slide'); if (ts) ts.classList.toggle('active', kind === 'slide');
     }
   `;
 
@@ -1651,7 +1710,7 @@ async function openManageTab(){
       <p class="muted">チーム番号は自動採番、チームパスワードは自動発行されます（追加後にその場で表示されます。メンバーはまだいないので、下の「学生一覧」から追加してください）。</p>
       <div id="newTeamMsg" class="msg"></div>
       <table>
-        <thead><tr><th>チーム番号</th><th>チーム名</th><th></th><th>状態</th></tr></thead>
+        <thead><tr><th>チーム番号</th><th>チーム名</th><th></th><th>代表者</th><th></th><th>状態</th></tr></thead>
         <tbody id="teamsBody"></tbody>
       </table>
     </div>
@@ -1699,16 +1758,27 @@ async function openManageTab(){
       }).join('');
     }
 
+    function leaderOptionsHtml(teamNo, selectedStudentId){
+      const teamMembers = MEMBERS.filter(function(m){ return String(m.teamNo) === String(teamNo); });
+      if (!teamMembers.length) return '<option value="">（メンバー未登録）</option>';
+      return '<option value="">（未設定）</option>' + teamMembers.map(function(m){
+        const sel = String(m.studentId) === String(selectedStudentId) ? ' selected' : '';
+        return '<option value="' + escapeHtml(m.studentId) + '"' + sel + '>' + escapeHtml(m.name) + '（' + escapeHtml(m.studentId) + '）</option>';
+      }).join('');
+    }
+
     function renderTeamsTable(){
       const rowsHtml = TEAMS.map(function(t){
         return '<tr>'
           + '<td>第' + t.teamNo + '班</td>'
           + '<td><input class="teamNameInput" value="' + escapeHtml(t.teamName) + '"></td>'
           + '<td><button class="btn small" data-action="save-team" data-id="' + t.teamNo + '">保存</button></td>'
+          + '<td><select class="teamLeaderSelect" data-team="' + t.teamNo + '">' + leaderOptionsHtml(t.teamNo, t.leaderStudentId) + '</select></td>'
+          + '<td><button class="btn small" data-action="save-leader" data-id="' + t.teamNo + '">代表者を保存</button></td>'
           + '<td><div class="msg" id="teamMsg-' + t.teamNo + '"></div></td>'
           + '</tr>';
       }).join('');
-      document.getElementById('teamsBody').innerHTML = rowsHtml || '<tr><td colspan="4" class="muted">チームが登録されていません。</td></tr>';
+      document.getElementById('teamsBody').innerHTML = rowsHtml || '<tr><td colspan="6" class="muted">チームが登録されていません。</td></tr>';
     }
 
     function renderMembersTable(){
@@ -1745,7 +1815,7 @@ async function openManageTab(){
       if (!teamName){ setMsg('newTeamMsg', 'チーム名を入力してください。', 'error'); return; }
       const res = await api('teacherCreateTeam', { teamName: teamName });
       if (!res.ok){ setMsg('newTeamMsg', res.error, 'error'); return; }
-      TEAMS.push({ teamNo: res.teamNo, teamName: res.teamName });
+      TEAMS.push({ teamNo: res.teamNo, teamName: res.teamName, leaderStudentId: '' });
       document.getElementById('newTeamName').value = '';
       setMsg('newTeamMsg', '第' + res.teamNo + '班「' + res.teamName + '」を追加しました。チームパスワード：' + res.teamPassword + '（その場でメンバーに伝えてください。この画面を閉じると再表示できません）', 'success');
       renderTeamsTable();
@@ -1769,23 +1839,40 @@ async function openManageTab(){
       document.getElementById('newStudentPassword').value = '';
       setMsg('newStudentMsg', '学籍番号 ' + res.studentId + ' を追加しました。パスワード：' + res.password + '（その場で学生に伝えてください。この画面を閉じると再表示できません）', 'success');
       renderMembersTable();
+      renderTeamsTable(); // 新しいメンバーが代表者候補に加わるため、選択肢を更新する
     });
 
     refreshNewStudentTeamSel();
 
     document.getElementById('teamsBody').addEventListener('click', async function(e){
-      const btn = e.target.closest('button[data-action="save-team"]');
-      if (!btn) return;
-      const teamNo = btn.getAttribute('data-id');
-      const tr = btn.closest('tr');
-      const teamName = tr.querySelector('.teamNameInput').value;
-      const msgId = 'teamMsg-' + teamNo;
-      const res = await api('teacherUpdateTeam', { teamNo: teamNo, teamName: teamName });
-      if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
-      setMsg(msgId, '保存しました。', 'success');
-      const t = TEAMS.find(function(x){ return String(x.teamNo) === String(teamNo); });
-      if (t) t.teamName = teamName;
-      updateTeamOptionLabel(teamNo, teamName);
+      const saveTeamBtn = e.target.closest('button[data-action="save-team"]');
+      const saveLeaderBtn = e.target.closest('button[data-action="save-leader"]');
+      if (saveTeamBtn){
+        const teamNo = saveTeamBtn.getAttribute('data-id');
+        const tr = saveTeamBtn.closest('tr');
+        const teamName = tr.querySelector('.teamNameInput').value;
+        const msgId = 'teamMsg-' + teamNo;
+        const res = await api('teacherUpdateTeam', { teamNo: teamNo, teamName: teamName });
+        if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+        setMsg(msgId, '保存しました。', 'success');
+        const t = TEAMS.find(function(x){ return String(x.teamNo) === String(teamNo); });
+        if (t) t.teamName = teamName;
+        updateTeamOptionLabel(teamNo, teamName);
+        return;
+      }
+      if (saveLeaderBtn){
+        const teamNo = saveLeaderBtn.getAttribute('data-id');
+        const tr = saveLeaderBtn.closest('tr');
+        const leaderStudentId = tr.querySelector('.teamLeaderSelect').value;
+        const msgId = 'teamMsg-' + teamNo;
+        if (!leaderStudentId){ setMsg(msgId, '代表者を選択してください。', 'error'); return; }
+        const res = await api('teacherSetTeamLeader', { teamNo: teamNo, leaderStudentId: leaderStudentId });
+        if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+        setMsg(msgId, '代表者を保存しました。', 'success');
+        const t = TEAMS.find(function(x){ return String(x.teamNo) === String(teamNo); });
+        if (t) t.leaderStudentId = leaderStudentId;
+        return;
+      }
     });
 
     document.getElementById('membersBody').addEventListener('click', async function(e){
@@ -1802,6 +1889,7 @@ async function openManageTab(){
         setMsg(msgId, '保存しました。', 'success');
         const m = MEMBERS.find(function(x){ return String(x.studentId) === String(studentId); });
         if (m){ m.name = name; m.teamNo = teamNo; }
+        renderTeamsTable(); // 所属チーム変更で代表者候補が変わりうるため、選択肢を更新する
         return;
       }
       if (pwBtn){
