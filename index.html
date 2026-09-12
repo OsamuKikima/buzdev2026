@@ -164,7 +164,9 @@
 
         <h3>メンバー（最大5人・1人目は必須）</h3>
         <div id="regMembers"></div>
-        <p class="muted">※学籍番号・氏名・パスワードは各メンバー必須です。パスワードは個人画面のログインに使います。メールは任意です。</p>
+        <p class="muted">※学籍番号・氏名・パスワードは各メンバー必須です。パスワードは個人画面のログインに使います。パスワードがわからなくなったら教員（聞間）に問い合わせてください。</p>
+        <p class="muted">※学籍番号は「20CB001」のように、先頭に「k」をつけず、「cb」ではなく大文字の「CB」で入力してください。</p>
+        <p class="muted">※氏名は名字と名前の間にスペースを入れてください（× 聞間理　○ 聞間　理）。</p>
         <button class="btn" onclick="submitTeamRegister()">登録する</button>
       </div>
 
@@ -238,6 +240,7 @@
       <input type="password" id="studentLoginPw">
       <button class="btn" onclick="doStudentLogin()">ログイン</button>
       <button class="btn secondary" onclick="showView('view-home')">戻る</button>
+      <p class="muted">パスワードがわからなくなったら教員（聞間）に問い合わせてください。</p>
     </div>
   </section>
 
@@ -300,7 +303,7 @@
         <button class="menu-btn" onclick="openOverviewTab()">全体一覧<span class="menu-sub">チーム×課題の提出・評価状況の一覧表</span></button>
         <button class="menu-btn" onclick="openIndividualTab()">個人ごとの成績を閲覧する<span class="menu-sub">学生を選んで貢献評価・チェックイン/チェックアウトを確認</span></button>
         <button class="menu-btn" onclick="openPresentationMenuTab()">提示モード<span class="menu-sub">学生に見せる掲示板形式の画面</span></button>
-        <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名/メールの編集、パスワードの再発行・再設定</span></button>
+        <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名の編集、パスワードの再発行・再設定</span></button>
       </div>
     </div>
     <div id="teacherInlinePanels"></div>
@@ -465,11 +468,10 @@ function renderRegMembers(){
       <div class="member-row">
         <strong>${i+1}人目${req ? '（必須）' : '（任意）'}</strong>
         <div class="row">
-          <div><label>学籍番号</label><input type="text" id="regSid_${i}"></div>
-          <div><label>氏名</label><input type="text" id="regName_${i}"></div>
+          <div><label>学籍番号</label><input type="text" id="regSid_${i}" placeholder="例）20CB001"></div>
+          <div><label>氏名</label><input type="text" id="regName_${i}" placeholder="例）聞間　理"></div>
         </div>
         <div class="row">
-          <div><label>連絡用メールアドレス</label><input type="email" id="regEmail_${i}"></div>
           <div><label>個人画面用パスワード</label><input type="password" id="regPw_${i}"></div>
         </div>
       </div>`;
@@ -477,16 +479,18 @@ function renderRegMembers(){
 }
 renderRegMembers();
 
+function isHalfWidthAlnum(s){ return /^[0-9A-Za-z]+$/.test(s); }
+
 async function submitTeamRegister(){
   const teamName = document.getElementById('regTeamName').value.trim();
   const members = [];
   for (let i = 0; i < 5; i++){
     const sid = document.getElementById('regSid_'+i).value.trim();
     const name = document.getElementById('regName_'+i).value.trim();
-    const email = document.getElementById('regEmail_'+i).value.trim();
     const pw = document.getElementById('regPw_'+i).value;
     if (!sid && !name && !pw) continue;
-    members.push({ studentId: sid, name: name, email: email, password: pw });
+    if (!isHalfWidthAlnum(sid)){ setMsg('regMsg', (i+1)+'人目：学籍番号は半角英数字で入力してください（例：20CB001）。'); return; }
+    members.push({ studentId: sid, name: name, password: pw });
   }
   if (!teamName){ setMsg('regMsg','チーム名を入力してください。'); return; }
   if (!members.length){ setMsg('regMsg','少なくとも1人のメンバーを入力してください。'); return; }
@@ -1620,7 +1624,7 @@ async function openPresentationMenuTab(){
   writeTabDoc(win, '提示モード', bodyHtml, extraCss, extraScript);
 }
 
-/* --- チーム・個人管理タブ（教員によるチーム名・所属チーム変更、氏名/メール編集、パスワード再発行・再設定） --- */
+/* --- チーム・個人管理タブ（教員によるチーム名・所属チーム変更、氏名編集、パスワード再発行・再設定） --- */
 
 async function openManageTab(){
   const win = openTarget('チーム・個人管理');
@@ -1630,8 +1634,9 @@ async function openManageTab(){
 
   const bodyHtml = `
     <h1>チーム・個人管理</h1>
-    <p class="muted">チーム名の変更、学生の氏名・メール・所属チームの変更、個人パスワードの再発行・再設定ができます。<br>
-    学籍番号は過去の提出・評価・チェックイン記録に紐づいているため、この画面では変更できません。チームパスワードはこの画面では変更されません。</p>
+    <p class="muted">チーム名の変更、学生の氏名・所属チームの変更、個人パスワードの再発行・再設定ができます。<br>
+    学籍番号は過去の提出・評価・チェックイン記録に紐づいているため、この画面では変更できません。チームパスワードはこの画面では変更されません。<br>
+    学生からパスワードがわからないと連絡があった場合は、この画面から再発行・再設定してください。</p>
     <div class="card table-wrap">
       <h2>チーム一覧</h2>
       <div class="row" style="align-items:flex-end;">
@@ -1655,15 +1660,11 @@ async function openManageTab(){
       <div class="row">
         <div>
           <label>学籍番号</label>
-          <input type="text" id="newStudentId">
+          <input type="text" id="newStudentId" placeholder="例）20CB001">
         </div>
         <div>
           <label>氏名</label>
-          <input type="text" id="newStudentName">
-        </div>
-        <div>
-          <label>メール（任意）</label>
-          <input type="text" id="newStudentEmail">
+          <input type="text" id="newStudentName" placeholder="例）聞間　理">
         </div>
         <div>
           <label>所属チーム</label>
@@ -1674,12 +1675,14 @@ async function openManageTab(){
           <input type="text" id="newStudentPassword">
         </div>
       </div>
+      <p class="muted">※学籍番号は「20CB001」のように、先頭に「k」をつけず、「cb」ではなく大文字の「CB」で入力してください。</p>
+      <p class="muted">※氏名は名字と名前の間にスペースを入れてください（× 聞間理　○ 聞間　理）。</p>
       <button class="btn" id="newStudentBtn">学生を追加する</button>
       <p class="muted">追加後に表示されるパスワードは、その場で学生に伝えてください（この画面を閉じると再表示できません。スプレッドシートのMembersシートでも確認できます）。</p>
       <div id="newStudentMsg" class="msg"></div>
       <p class="muted">パスワードは「新しいパスワード」欄を空欄のまま再発行すると8桁の数字が自動生成されます。特定の値に変更したい場合は入力してから実行してください。実行後に表示される新しいパスワードは、その場で学生に伝えてください（この画面を閉じると再表示できません。スプレッドシートのMembersシートでも確認できます）。</p>
       <table>
-        <thead><tr><th>学籍番号</th><th>氏名</th><th>メール</th><th>所属チーム</th><th></th><th>新しいパスワード（任意）</th><th></th><th>状態</th></tr></thead>
+        <thead><tr><th>学籍番号</th><th>氏名</th><th>所属チーム</th><th></th><th>新しいパスワード（任意）</th><th></th><th>状態</th></tr></thead>
         <tbody id="membersBody"></tbody>
       </table>
     </div>
@@ -1713,7 +1716,6 @@ async function openManageTab(){
         return '<tr>'
           + '<td>' + escapeHtml(m.studentId) + '</td>'
           + '<td><input class="memberNameInput" value="' + escapeHtml(m.name) + '"></td>'
-          + '<td><input class="memberEmailInput" value="' + escapeHtml(m.email) + '"></td>'
           + '<td><select class="memberTeamSelect">' + teamOptionsHtml(m.teamNo) + '</select></td>'
           + '<td><button class="btn small" data-action="save-member" data-id="' + escapeHtml(m.studentId) + '">保存</button></td>'
           + '<td><input class="memberPwInput" placeholder="空欄で自動生成"></td>'
@@ -1721,7 +1723,7 @@ async function openManageTab(){
           + '<td><div class="msg" id="memberMsg-' + escapeHtml(m.studentId) + '"></div></td>'
           + '</tr>';
       }).join('');
-      document.getElementById('membersBody').innerHTML = rowsHtml || '<tr><td colspan="8" class="muted">学生が登録されていません。</td></tr>';
+      document.getElementById('membersBody').innerHTML = rowsHtml || '<tr><td colspan="7" class="muted">学生が登録されていません。</td></tr>';
     }
 
     function updateTeamOptionLabel(teamNo, teamName){
@@ -1753,18 +1755,17 @@ async function openManageTab(){
     document.getElementById('newStudentBtn').addEventListener('click', async function(){
       const studentId = document.getElementById('newStudentId').value.trim();
       const name = document.getElementById('newStudentName').value.trim();
-      const email = document.getElementById('newStudentEmail').value.trim();
       const teamNo = document.getElementById('newStudentTeamSel').value;
       const password = document.getElementById('newStudentPassword').value.trim();
       if (!studentId){ setMsg('newStudentMsg', '学籍番号を入力してください。', 'error'); return; }
+      if (!/^[0-9A-Za-z]+$/.test(studentId)){ setMsg('newStudentMsg', '学籍番号は半角英数字で入力してください（例：20CB001）。', 'error'); return; }
       if (!name){ setMsg('newStudentMsg', '氏名を入力してください。', 'error'); return; }
       if (!teamNo){ setMsg('newStudentMsg', '所属チームを選択してください（チームが1つもない場合は、先にチームを追加してください）。', 'error'); return; }
-      const res = await api('teacherCreateMember', { studentId: studentId, name: name, email: email, teamNo: teamNo, password: password });
+      const res = await api('teacherCreateMember', { studentId: studentId, name: name, teamNo: teamNo, password: password });
       if (!res.ok){ setMsg('newStudentMsg', res.error, 'error'); return; }
-      MEMBERS.push({ studentId: res.studentId, name: name, email: email, teamNo: teamNo });
+      MEMBERS.push({ studentId: res.studentId, name: name, teamNo: teamNo });
       document.getElementById('newStudentId').value = '';
       document.getElementById('newStudentName').value = '';
-      document.getElementById('newStudentEmail').value = '';
       document.getElementById('newStudentPassword').value = '';
       setMsg('newStudentMsg', '学籍番号 ' + res.studentId + ' を追加しました。パスワード：' + res.password + '（その場で学生に伝えてください。この画面を閉じると再表示できません）', 'success');
       renderMembersTable();
@@ -1794,14 +1795,13 @@ async function openManageTab(){
         const studentId = saveBtn.getAttribute('data-id');
         const tr = saveBtn.closest('tr');
         const name = tr.querySelector('.memberNameInput').value;
-        const email = tr.querySelector('.memberEmailInput').value;
         const teamNo = tr.querySelector('.memberTeamSelect').value;
         const msgId = 'memberMsg-' + studentId;
-        const res = await api('teacherUpdateMember', { studentId: studentId, name: name, email: email, teamNo: teamNo });
+        const res = await api('teacherUpdateMember', { studentId: studentId, name: name, teamNo: teamNo });
         if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
         setMsg(msgId, '保存しました。', 'success');
         const m = MEMBERS.find(function(x){ return String(x.studentId) === String(studentId); });
-        if (m){ m.name = name; m.email = email; m.teamNo = teamNo; }
+        if (m){ m.name = name; m.teamNo = teamNo; }
         return;
       }
       if (pwBtn){
