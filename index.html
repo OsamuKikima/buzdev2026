@@ -251,6 +251,7 @@
       <button class="link-btn" onclick="logout()">&larr; 全体（トップ）に戻る</button>
       <h2 id="studentHomeTitle"></h2>
       <p class="muted" id="studentHomeDate"></p>
+      <div id="absenceNotice" class="msg" style="display:none;"></div>
       <div id="studentMsg" class="msg"></div>
 
       <h3>チェックイン：今日の授業コマで意識したいこと（目標）</h3>
@@ -302,7 +303,7 @@
         <button class="menu-btn" onclick="openAssignmentTab()">課題管理<span class="menu-sub">授業日ごとの問い（テキスト・ファイル）の登録・編集・削除</span></button>
         <button class="menu-btn" onclick="openReviewTab()">提出された課題を確認して評価する<span class="menu-sub">提出内容の確認、S/A/B/C/D評価とコメントの入力</span></button>
         <button class="menu-btn" onclick="openOverviewTab()">全体一覧<span class="menu-sub">チーム×課題の提出・評価状況の一覧表</span></button>
-        <button class="menu-btn" onclick="openIndividualTab()">個人ごとの成績を閲覧する<span class="menu-sub">学生を選んで貢献評価・チェックイン/チェックアウトを確認</span></button>
+        <button class="menu-btn" onclick="openIndividualTab()">個人ごとの成績を閲覧する<span class="menu-sub">学生を選んで貢献評価・チェックイン/チェックアウト・欠席の記録を確認</span></button>
         <button class="menu-btn" onclick="openPresentationMenuTab()">提示モード<span class="menu-sub">学生に見せる掲示板形式の画面</span></button>
         <button class="menu-btn" onclick="openManageTab()">チーム・個人管理<span class="menu-sub">チーム名・所属チームの変更、氏名の編集、パスワードの再発行・再設定</span></button>
       </div>
@@ -703,6 +704,11 @@ async function doStudentLogin(){
 async function loadStudentToday(){
   const res = await api('studentToday', { studentId: session.studentId, date: todayIso() });
   if (!res.ok) return;
+  if (res.absence){
+    setMsg('absenceNotice', '本日は欠席として記録されています。理由：' + res.absence.reason, 'success');
+  } else {
+    setMsg('absenceNotice', '');
+  }
   if (res.checkin){
     document.getElementById('checkinText').value = res.checkin.goal_text;
     document.getElementById('checkinStatus').textContent = '本日 ' + res.checkin.timestamp + ' にチェックイン済み';
@@ -754,14 +760,17 @@ async function loadStudentHistory(){
   const res = await api('studentHistory', { studentId: session.studentId });
   const el = document.getElementById('studentHistory');
   if (!res.ok){ el.textContent = '取得に失敗しました。'; return; }
-  if (!res.checkins.length && !res.checkouts.length){ el.textContent = 'まだ記録がありません。'; return; }
-  let html = '<table><thead><tr><th>日付</th><th>チェックイン（目標）</th><th>チェックイン時刻</th><th>チェックアウト（貢献／準備）</th><th>チェックアウト時刻</th></tr></thead><tbody>';
-  const dates = Array.from(new Set(res.checkins.map(c=>c.date).concat(res.checkouts.map(c=>c.date)))).sort().reverse();
+  const absences = res.absences || [];
+  if (!res.checkins.length && !res.checkouts.length && !absences.length){ el.textContent = 'まだ記録がありません。'; return; }
+  let html = '<table><thead><tr><th>日付</th><th>チェックイン（目標）</th><th>チェックイン時刻</th><th>チェックアウト（貢献／準備）</th><th>チェックアウト時刻</th><th>欠席</th></tr></thead><tbody>';
+  const dates = Array.from(new Set(res.checkins.map(c=>c.date).concat(res.checkouts.map(c=>c.date)).concat(absences.map(a=>a.date)))).sort().reverse();
   dates.forEach(d => {
     const ci = res.checkins.find(c=>c.date===d);
     const co = res.checkouts.find(c=>c.date===d);
+    const ab = absences.find(a=>a.date===d);
     html += '<tr><td>'+escapeHtml(d)+'</td><td>'+escapeHtml(ci?ci.goal_text:'')+'</td><td>'+escapeHtml(ci?timeOnly(ci.timestamp):'')+'</td><td>'+
-      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td><td>'+escapeHtml(co?timeOnly(co.timestamp):'')+'</td></tr>';
+      (co ? escapeHtml(co.contribution_text) + ' ／ ' + escapeHtml(co.prep_text) : '') + '</td><td>'+escapeHtml(co?timeOnly(co.timestamp):'')+'</td><td>'+
+      (ab ? '欠席：' + escapeHtml(ab.reason) : '') + '</td></tr>';
   });
   html += '</tbody></table>';
   el.innerHTML = html;
@@ -1362,7 +1371,7 @@ async function openIndividualTab(){
     <div id="board-all" class="board-wrap">
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
+          <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th><th>欠席</th></tr></thead>
           <tbody id="allStudentsBody"></tbody>
         </table>
       </div>
@@ -1381,7 +1390,7 @@ async function openIndividualTab(){
       </div>
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th></tr></thead>
+          <thead><tr><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th><th>欠席</th></tr></thead>
           <tbody id="teamStudentsBody"></tbody>
         </table>
       </div>
@@ -1391,6 +1400,7 @@ async function openIndividualTab(){
   const extraScript = `
     const STUDENTS = ${embedJson(students)};
     const TEAMS = ${embedJson(teamsForSelect)};
+    const TEACHER_NAME = ${embedJson(session.teacherName || '')};
 
     function scoreLabel(s){
       const total = (s.scoreTotal != null) ? s.scoreTotal : 0;
@@ -1421,6 +1431,10 @@ async function openIndividualTab(){
           return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
+        const abCell = (s.absences || []).map(function(a){
+          return '<div>' + escapeHtml(a.date) + '：' + escapeHtml(a.reason) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
         return '<tr>'
           + '<td>第' + escapeHtml(String(s.teamNo)) + '班</td>'
           + '<td>' + escapeHtml(s.studentId) + '</td>'
@@ -1429,9 +1443,10 @@ async function openIndividualTab(){
           + '<td>' + escapeHtml(scoreLabel(s)) + '</td>'
           + '<td>' + ciCell + '</td>'
           + '<td>' + coCell + '</td>'
+          + '<td>' + abCell + '</td>'
           + '</tr>';
       }).join('');
-      document.getElementById('allStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="7" class="muted">学生が登録されていません。</td></tr>';
+      document.getElementById('allStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="8" class="muted">学生が登録されていません。</td></tr>';
     }
 
     function studentOptionsHtml(){
@@ -1462,6 +1477,10 @@ async function openIndividualTab(){
           return '<div>' + escapeHtml(c.date) + ' ' + escapeHtml(timeOnly(c.timestamp)) + '：' + escapeHtml(c.contributionText) + ' ／ ' + escapeHtml(c.prepText) + '</div>';
         }).join('') || '<span class="muted">記録なし</span>';
 
+        const abCell = (s.absences || []).map(function(a){
+          return '<div>' + escapeHtml(a.date) + '：' + escapeHtml(a.reason) + '</div>';
+        }).join('') || '<span class="muted">記録なし</span>';
+
         return '<tr>'
           + '<td>' + escapeHtml(s.studentId) + '</td>'
           + '<td>' + escapeHtml(s.name) + '</td>'
@@ -1469,9 +1488,10 @@ async function openIndividualTab(){
           + '<td>' + escapeHtml(scoreLabel(s)) + '</td>'
           + '<td>' + ciCell + '</td>'
           + '<td>' + coCell + '</td>'
+          + '<td>' + abCell + '</td>'
           + '</tr>';
       }).join('');
-      document.getElementById('teamStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="6" class="muted">このチームに所属する学生が登録されていません。</td></tr>';
+      document.getElementById('teamStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="7" class="muted">このチームに所属する学生が登録されていません。</td></tr>';
     }
 
     function renderIndividual(){
@@ -1492,6 +1512,11 @@ async function openIndividualTab(){
         return '<tr><td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(timeOnly(c.timestamp)) + '</td><td>' + escapeHtml(c.contributionText) + '</td><td>' + escapeHtml(c.prepText) + '</td></tr>';
       }).join('') || '<tr><td colspan="4" class="muted">記録なし</td></tr>';
 
+      const abRowsHtml = (s.absences || []).map(function(a){
+        return '<tr><td>' + escapeHtml(a.date) + '</td><td>' + escapeHtml(a.reason) + '</td>'
+          + '<td><button class="btn small secondary" data-action="delete-absence" data-date="' + escapeHtml(a.date) + '">削除</button></td></tr>';
+      }).join('') || '<tr><td colspan="3" class="muted">記録なし</td></tr>';
+
       wrap.innerHTML = '<div class="card table-wrap"><h2>第' + escapeHtml(String(s.teamNo)) + '班　' + escapeHtml(s.studentId) + '　' + escapeHtml(s.name) + '</h2>'
         + '<h3>チーム代表者による貢献評価（授業日ごとに1回）　累積：' + escapeHtml(scoreLabel(s)) + '</h3>'
         + '<table><thead><tr><th>日付</th><th>貢献内容</th><th>貢献度</th></tr></thead><tbody>' + evalRowsHtml + '</tbody></table>'
@@ -1499,7 +1524,50 @@ async function openIndividualTab(){
         + '<table><thead><tr><th>日付</th><th>時刻</th><th>今日意識したいこと</th></tr></thead><tbody>' + ciRowsHtml + '</tbody></table>'
         + '<h3>チェックアウト</h3>'
         + '<table><thead><tr><th>日付</th><th>時刻</th><th>貢献できたこと</th><th>次回への準備</th></tr></thead><tbody>' + coRowsHtml + '</tbody></table>'
+        + '<h3>欠席の記録</h3>'
+        + '<p class="muted">学生から休む連絡があったときに、その理由とともに記録してください。同じ日付で再度記録すると内容が上書きされます。</p>'
+        + '<div class="row" style="align-items:flex-end;">'
+        +   '<div><label>日付</label><input type="date" id="absenceDate"></div>'
+        +   '<div style="flex:2;"><label>理由</label><input type="text" id="absenceReason" placeholder="例）体調不良のため"></div>'
+        +   '<div style="flex:0 0 auto;"><button class="btn" id="absenceSaveBtn" style="margin-top:4px;">欠席を記録する</button></div>'
+        + '</div>'
+        + '<div id="absenceMsg" class="msg"></div>'
+        + '<table><thead><tr><th>日付</th><th>理由</th><th></th></tr></thead><tbody id="absenceBody">' + abRowsHtml + '</tbody></table>'
         + '</div>';
+
+      document.getElementById('absenceDate').value = todayIso();
+
+      document.getElementById('absenceSaveBtn').addEventListener('click', async function(){
+        const date = document.getElementById('absenceDate').value;
+        const reason = document.getElementById('absenceReason').value.trim();
+        if (!date){ setMsg('absenceMsg', '日付を選択してください。', 'error'); return; }
+        if (!reason){ setMsg('absenceMsg', '理由を入力してください。', 'error'); return; }
+        const res = await api('teacherRecordAbsence', { studentId: s.studentId, date: date, reason: reason, teacherName: TEACHER_NAME });
+        if (!res.ok){ setMsg('absenceMsg', res.error, 'error'); return; }
+        s.absences = s.absences || [];
+        const existing = s.absences.find(function(a){ return a.date === date; });
+        if (existing) existing.reason = reason; else s.absences.push({ date: date, reason: reason });
+        s.absences.sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+        renderIndividual();
+        renderAllStudents();
+        renderTeamStudents();
+        setMsg('absenceMsg', '記録しました。', 'success');
+      });
+
+      document.getElementById('absenceBody').addEventListener('click', async function(e){
+        const btn = e.target.closest('button[data-action="delete-absence"]');
+        if (!btn) return;
+        const date = btn.getAttribute('data-date');
+        const sure = confirm(escapeHtml(s.name) + 'さんの' + date + 'の欠席記録を削除しますか？');
+        if (!sure) return;
+        const res = await api('teacherDeleteAbsence', { studentId: s.studentId, date: date });
+        if (!res.ok){ setMsg('absenceMsg', res.error, 'error'); return; }
+        s.absences = (s.absences || []).filter(function(a){ return a.date !== date; });
+        renderIndividual();
+        renderAllStudents();
+        renderTeamStudents();
+        setMsg('absenceMsg', '削除しました。', 'success');
+      });
     }
 
     function showBoard(kind){
