@@ -372,7 +372,8 @@ function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
  */
 async function apiRequestOnce(action, payload){
   const encoded = encodeURIComponent(JSON.stringify(payload));
-  const hasFile = !!payload.fileBase64;
+  // 画像・スライドなどのファイルを含む場合は、たとえ小さいファイルでbase64が短くても必ずPOSTを使う
+  const hasFile = !!(payload.fileBase64 || payload.photoBase64 || payload.slideBase64);
   const useGet = !hasFile && encoded.length < 6000; // 6000字を超える/画像添付時はPOST
 
   let res;
@@ -930,7 +931,9 @@ function tabCommonScript(){
     }
     async function apiRequestOnce(action, payload){
       const encoded = encodeURIComponent(JSON.stringify(payload));
-      const hasFile = !!payload.fileBase64;
+      // 画像・スライドなどのファイルを含む場合は、たとえ小さいファイルでbase64が短くても
+      // 必ずPOSTを使う（GETのクエリ文字列にbase64データを載せるのは、短くても避けたい）。
+      const hasFile = !!(payload.fileBase64 || payload.photoBase64 || payload.slideBase64);
       const useGet = !hasFile && encoded.length < 6000;
       let res;
       if (useGet){ res = await fetch(API_URL + '?data=' + encoded, { method: 'GET' }); }
@@ -956,6 +959,18 @@ function tabCommonScript(){
         alert('サーバーへの通信に失敗しました（' + action + '）。時間をおいて再度お試しください。');
         return { ok: false, error: '通信エラー' };
       } finally { hideLoading(); }
+    }
+    // ファイル選択欄で選ばれたファイルをbase64（data URL）に変換する。
+    // メイン画面（トップページ）だけでなく、教員のタブ（チーム・個人管理など、
+    // 新しいウィンドウ/タブとして開かれる別ドキュメント）でも写真アップロードに使うため、
+    // 各タブに共通で埋め込まれるこのtabCommonScript()にも用意しておく。
+    function fileToBase64(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
     function computeAssignmentLabels(assignments){
       const seqByDate = {};
