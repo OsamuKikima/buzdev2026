@@ -878,6 +878,19 @@ function tabCommonStyle(){
     .loading-spinner{width:34px;height:34px;border-radius:50%;border:5px solid #ddd;border-top-color:#2b5fd9;animation:loading-spin 0.8s linear infinite;}
     @keyframes loading-spin{to{transform:rotate(360deg);}}
     .table-wrap{overflow-x:auto;}
+    .thumb-editable-wrap{display:inline-block;position:relative;}
+    .edit-photo-btn{display:block;margin:4px 0 8px;}
+    .img-edit-overlay{position:fixed;inset:0;z-index:3000;background:rgba(20,24,32,0.72);display:flex;align-items:center;justify-content:center;padding:16px;}
+    .img-edit-box{background:#fff;border-radius:12px;padding:18px;max-width:min(900px,96vw);max-height:94vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,0.35);}
+    .img-edit-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+    .img-edit-toolbar button{background:#eef1f5;color:#1f2430;border:1px solid #dde1e6;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;}
+    .img-edit-toolbar button:hover{background:#dfe4ea;}
+    .img-edit-hint{font-size:12px;color:#666f7d;}
+    .img-edit-canvas-wrap{position:relative;overflow:auto;max-height:62vh;border:1px solid #dde1e6;border-radius:8px;background:repeating-conic-gradient(#eee 0% 25%,#fff 0% 50%) 50%/16px 16px;text-align:center;}
+    .img-edit-canvas-wrap canvas{max-width:100%;display:block;margin:0 auto;cursor:crosshair;}
+    .img-edit-selbox{position:absolute;border:2px dashed #2b5fd9;background:rgba(43,95,217,0.15);pointer-events:none;}
+    .img-edit-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;}
+    .img-edit-actions .msg{flex:1;margin:0;}
   `;
 }
 
@@ -954,6 +967,164 @@ function tabCommonScript(){
       const countByDate = {};
       assignments.forEach(function(a){ countByDate[a.date] = (countByDate[a.date] || 0) + 1; });
       return { labelOf: labelOf, countByDate: countByDate };
+    }
+
+    // 画像を差し替えた直後にブラウザが古い画像をキャッシュから表示してしまわないようにする
+    function cacheBust(url){
+      return url + (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+    }
+
+    /* ---- 提出画像の編集（回転・トリミング）。採点画面・提示モードの両方から使う共通処理 ---- */
+
+    function closeImageEditor(){
+      const el = document.getElementById('imgEditOverlay');
+      if (el) el.remove();
+    }
+
+    // opts: { assignmentId, teamNo, onSaved: function(newFileUrl) }
+    async function openImageEditor(opts){
+      closeImageEditor();
+      const overlay = document.createElement('div');
+      overlay.id = 'imgEditOverlay';
+      overlay.className = 'img-edit-overlay';
+      overlay.innerHTML = '<div class="img-edit-box">'
+        + '<h3 style="margin:0;">画像を編集（回転・トリミング）</h3>'
+        + '<div class="img-edit-toolbar">'
+        +   '<button type="button" id="imgEditRotateLeft">⟲ 左に90度回転</button>'
+        +   '<button type="button" id="imgEditRotateRight">⟳ 右に90度回転</button>'
+        +   '<button type="button" id="imgEditCropApply">切り抜きを確定</button>'
+        +   '<button type="button" id="imgEditReset">編集前に戻す</button>'
+        +   '<span class="img-edit-hint">切り抜きたい範囲があれば、画像の上をドラッグして選択してから「切り抜きを確定」を押してください。</span>'
+        + '</div>'
+        + '<div id="imgEditCanvasWrap" class="img-edit-canvas-wrap"><canvas id="imgEditCanvas"></canvas><div id="imgEditSelBox" class="img-edit-selbox" hidden></div></div>'
+        + '<div class="img-edit-actions"><div id="imgEditMsg" class="msg"></div>'
+        +   '<button type="button" class="btn secondary" id="imgEditCancel">キャンセル</button>'
+        +   '<button type="button" class="btn" id="imgEditSave">この内容で保存する</button></div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+
+      setMsg('imgEditMsg', '読み込み中…', '');
+      const loadRes = await api('teacherGetSubmissionFileBase64', { assignmentId: opts.assignmentId, teamNo: opts.teamNo });
+      if (!document.getElementById('imgEditOverlay')) return; // その間にキャンセルされた場合
+      if (!loadRes.ok){ setMsg('imgEditMsg', loadRes.error || '画像の読み込みに失敗しました。', 'error'); return; }
+
+      const canvas = document.getElementById('imgEditCanvas');
+      const ctx = canvas.getContext('2d');
+      const originalDataUrl = loadRes.dataUrl;
+
+      function loadInto(dataUrl){
+        return new Promise(function(resolve){
+          const img = new Image();
+          img.onload = function(){
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            resolve();
+          };
+          img.src = dataUrl;
+        });
+      }
+
+      await loadInto(originalDataUrl);
+      setMsg('imgEditMsg', '', '');
+
+      let sel = null;
+      let dragging = false;
+      const wrap = document.getElementById('imgEditCanvasWrap');
+      const selBox = document.getElementById('imgEditSelBox');
+
+      function canvasPointFromEvent(e){
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+          x: Math.max(0, Math.min(canvas.width, (e.clientX - rect.left) * scaleX)),
+          y: Math.max(0, Math.min(canvas.height, (e.clientY - rect.top) * scaleY))
+        };
+      }
+
+      function updateSelBoxUi(){
+        if (!sel){ selBox.hidden = true; return; }
+        const rect = canvas.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+        const scaleX = rect.width / canvas.width;
+        const scaleY = rect.height / canvas.height;
+        const x0 = Math.min(sel.x0, sel.x1), x1 = Math.max(sel.x0, sel.x1);
+        const y0 = Math.min(sel.y0, sel.y1), y1 = Math.max(sel.y0, sel.y1);
+        selBox.hidden = false;
+        selBox.style.left = (rect.left - wrapRect.left + wrap.scrollLeft + x0 * scaleX) + 'px';
+        selBox.style.top = (rect.top - wrapRect.top + wrap.scrollTop + y0 * scaleY) + 'px';
+        selBox.style.width = ((x1 - x0) * scaleX) + 'px';
+        selBox.style.height = ((y1 - y0) * scaleY) + 'px';
+      }
+
+      canvas.addEventListener('mousedown', function(e){
+        const p = canvasPointFromEvent(e);
+        sel = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+        dragging = true;
+        updateSelBoxUi();
+      });
+      window.addEventListener('mousemove', function(e){
+        if (!dragging) return;
+        const p = canvasPointFromEvent(e);
+        sel.x1 = p.x; sel.y1 = p.y;
+        updateSelBoxUi();
+      });
+      window.addEventListener('mouseup', function(){ dragging = false; });
+
+      function rotate(deg){
+        const w = canvas.width, h = canvas.height;
+        const rotated = document.createElement('canvas');
+        const turned = (Math.abs(deg) === 90 || Math.abs(deg) === 270);
+        rotated.width = turned ? h : w;
+        rotated.height = turned ? w : h;
+        const rctx = rotated.getContext('2d');
+        rctx.translate(rotated.width / 2, rotated.height / 2);
+        rctx.rotate(deg * Math.PI / 180);
+        rctx.drawImage(canvas, -w / 2, -h / 2);
+        canvas.width = rotated.width;
+        canvas.height = rotated.height;
+        ctx.drawImage(rotated, 0, 0);
+        sel = null; updateSelBoxUi();
+      }
+
+      document.getElementById('imgEditRotateLeft').addEventListener('click', function(){ rotate(-90); });
+      document.getElementById('imgEditRotateRight').addEventListener('click', function(){ rotate(90); });
+
+      document.getElementById('imgEditCropApply').addEventListener('click', function(){
+        if (!sel){ setMsg('imgEditMsg', '先に画像の上をドラッグして、切り抜く範囲を選んでください。', 'error'); return; }
+        const x0 = Math.round(Math.min(sel.x0, sel.x1)), y0 = Math.round(Math.min(sel.y0, sel.y1));
+        const w = Math.round(Math.abs(sel.x1 - sel.x0)), h = Math.round(Math.abs(sel.y1 - sel.y0));
+        if (w < 5 || h < 5){ setMsg('imgEditMsg', '切り抜く範囲が小さすぎます。', 'error'); return; }
+        const cropped = document.createElement('canvas');
+        cropped.width = w; cropped.height = h;
+        cropped.getContext('2d').drawImage(canvas, x0, y0, w, h, 0, 0, w, h);
+        canvas.width = w; canvas.height = h;
+        ctx.drawImage(cropped, 0, 0);
+        sel = null; updateSelBoxUi();
+        setMsg('imgEditMsg', '', '');
+      });
+
+      document.getElementById('imgEditReset').addEventListener('click', async function(){
+        sel = null; updateSelBoxUi();
+        setMsg('imgEditMsg', '', '');
+        await loadInto(originalDataUrl);
+      });
+
+      document.getElementById('imgEditCancel').addEventListener('click', closeImageEditor);
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) closeImageEditor(); });
+
+      document.getElementById('imgEditSave').addEventListener('click', async function(){
+        const dataUrl = canvas.toDataURL('image/png');
+        setMsg('imgEditMsg', '保存しています…', '');
+        const res = await api('teacherUpdateSubmissionFile', {
+          assignmentId: opts.assignmentId, teamNo: opts.teamNo, fileBase64: dataUrl
+        });
+        if (!document.getElementById('imgEditOverlay')) return;
+        if (!res.ok){ setMsg('imgEditMsg', res.error || '保存に失敗しました。', 'error'); return; }
+        closeImageEditor();
+        if (opts.onSaved) opts.onSaved(res.fileUrl);
+      });
     }
   `;
 }
@@ -1243,7 +1414,10 @@ async function openReviewTab(){
       } else {
         html += '<h3>提出内容</h3>';
         html += '<p style="white-space:pre-wrap;">' + escapeHtml(sub.text_content) + '</p>';
-        if (sub.file_url) html += '<img class="thumb" src="' + sub.file_url + '">';
+        if (sub.file_url) {
+          html += '<div><img class="thumb" id="reviewSubImg" src="' + sub.file_url + '"></div>'
+            + '<button class="btn secondary small edit-photo-btn" type="button" onclick="editReviewSubmissionImage()">画像を編集（回転・トリミング）</button>';
+        }
         if (sub.slide_view_url) html += '<p><a href="' + sub.slide_view_url + '" target="_blank">' + (sub.slide_file_name ? 'ファイルを開く（' + escapeHtml(sub.slide_file_name) + '）' : 'リンクを開く') + '</a></p>';
         html += '<p class="muted">提出者：' + escapeHtml(sub.submitted_by) + ' ／ 投稿日：' + escapeHtml(sub.first_submitted_at || sub.submitted_at)
           + (sub.submitted_at && sub.submitted_at !== sub.first_submitted_at ? ' ／ 更新日：' + escapeHtml(sub.submitted_at) : '') + '</p>';
@@ -1271,6 +1445,19 @@ async function openReviewTab(){
         + '<button class="btn" onclick="saveTeacherEvaluation()">評価を保存</button>'
         + '<div id="evalMsg" class="msg"></div>';
       body.innerHTML = html;
+    }
+
+    function editReviewSubmissionImage(){
+      const assignmentId = document.getElementById('reviewAssignSel').value;
+      const teamNo = document.getElementById('reviewTeamSel').value;
+      openImageEditor({
+        assignmentId: assignmentId,
+        teamNo: teamNo,
+        onSaved: function(newFileUrl){
+          const img = document.getElementById('reviewSubImg');
+          if (img) img.src = cacheBust(newFileUrl);
+        }
+      });
     }
 
     async function saveTeacherEvaluation(){
@@ -1381,7 +1568,7 @@ async function openIndividualTab(){
     <div id="board-all" class="board-wrap">
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>写真</th><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th><th>欠席</th></tr></thead>
+          <thead><tr><th>チーム</th><th>学籍番号</th><th>氏名</th><th>チーム代表者による貢献評価</th><th>累積評価点数</th><th>チェックイン</th><th>チェックアウト</th><th>欠席</th></tr></thead>
           <tbody id="allStudentsBody"></tbody>
         </table>
       </div>
@@ -1452,7 +1639,6 @@ async function openIndividualTab(){
         }).join('') || '<span class="muted">記録なし</span>';
 
         return '<tr>'
-          + '<td>' + photoCellHtml(s, 44) + '</td>'
           + '<td>第' + escapeHtml(String(s.teamNo)) + '班</td>'
           + '<td>' + escapeHtml(s.studentId) + '</td>'
           + '<td>' + escapeHtml(s.name) + '</td>'
@@ -1463,7 +1649,7 @@ async function openIndividualTab(){
           + '<td>' + abCell + '</td>'
           + '</tr>';
       }).join('');
-      document.getElementById('allStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="9" class="muted">学生が登録されていません。</td></tr>';
+      document.getElementById('allStudentsBody').innerHTML = rowsHtml || '<tr><td colspan="8" class="muted">学生が登録されていません。</td></tr>';
     }
 
     function studentOptionsHtml(){
@@ -1645,7 +1831,7 @@ async function openPresentationMenuTab(){
 
   const bodyHtml = `
     <h1>提示モード（学生に見せる画面）</h1>
-    <p class="muted">課題を選んで「表示する」を押すと、下に掲示板形式で提出内容が表示されます。そのままこのタブを投影できます。</p>
+    <p class="muted">課題を選んで「表示する」を押すと、下に掲示板形式で提出内容が表示されます。そのままこのタブを投影できます。各チームのカードをクリックすると、そのチームの提出だけを大きく表示できます。</p>
     <div class="card">
       <label>課題（授業日）</label>
       <select id="presentAssignSel">${optsHtml}</select>
@@ -1656,14 +1842,18 @@ async function openPresentationMenuTab(){
 
   const extraScript = `
     const ASSIGNMENTS = ${embedJson(res.assignments || [])};
+    let CURRENT_ITEMS = [];
+    let CURRENT_ASSIGNMENT_ID = '';
 
     async function loadPresentationBoard(){
       const assignmentId = document.getElementById('presentAssignSel').value;
       if (!assignmentId) return;
+      CURRENT_ASSIGNMENT_ID = assignmentId;
       const a = ASSIGNMENTS.find(function(x){ return x.assignment_id === assignmentId; });
       const res = await api('teacherPresentationList', { assignmentId: assignmentId });
       const wrap = document.getElementById('presentResult');
       if (!res.ok){ wrap.innerHTML = '<p style="color:#c00;">' + escapeHtml(res.error) + '</p>'; return; }
+      CURRENT_ITEMS = res.items || [];
       wrap.innerHTML = buildPresentationBoardHtml(a, res.items);
       const textBtn = document.getElementById('tab-btn-text');
       const imageBtn = document.getElementById('tab-btn-image');
@@ -1687,7 +1877,7 @@ async function openPresentationMenuTab(){
       const textCards = items.map(function(it){
         if (!it.textContent) return '';
         const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
-        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+        return '<div class="pcard" data-team-no="' + escapeHtml(String(it.teamNo)) + '"><div class="pteam">' + team + '</div>'
           + '<div class="post-text">' + escapeHtml(it.textContent).replace(/\\n/g,'<br>') + '</div></div>';
       }).filter(Boolean).join('');
 
@@ -1695,7 +1885,7 @@ async function openPresentationMenuTab(){
         if (!it.fileUrl) return '';
         const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
         const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\\n/g,'<br>') + '</div>' : '';
-        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+        return '<div class="pcard" data-team-no="' + escapeHtml(String(it.teamNo)) + '"><div class="pteam">' + team + '</div>'
           + '<img src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">' + commentHtml + '</div>';
       }).filter(Boolean).join('');
 
@@ -1704,7 +1894,7 @@ async function openPresentationMenuTab(){
         const team = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
         const commentHtml = it.comment ? '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\\n/g,'<br>') + '</div>' : '';
         const linkLabel = it.slideFileName ? 'ファイルを開く（' + escapeHtml(it.slideFileName) + '）' : 'リンクを開く';
-        return '<div class="pcard"><div class="pteam">' + team + '</div>'
+        return '<div class="pcard" data-team-no="' + escapeHtml(String(it.teamNo)) + '"><div class="pteam">' + team + '</div>'
           + '<p><a href="' + it.slideViewUrl + '" target="_blank">' + linkLabel + '</a></p>' + commentHtml + '</div>';
       }).filter(Boolean).join('');
 
@@ -1750,6 +1940,77 @@ async function openPresentationMenuTab(){
       const ti = document.getElementById('tab-btn-image'); if (ti) ti.classList.toggle('active', kind === 'image');
       const ts = document.getElementById('tab-btn-slide'); if (ts) ts.classList.toggle('active', kind === 'slide');
     }
+
+    /* ---- カードをクリックすると、そのチームの提出だけを大きく表示する ---- */
+
+    function closeTeamLightbox(){
+      const el = document.getElementById('teamLightboxOverlay');
+      if (el) el.remove();
+    }
+
+    function openTeamLightbox(teamNo){
+      const it = CURRENT_ITEMS.find(function(x){ return String(x.teamNo) === String(teamNo); });
+      if (!it) return;
+      closeTeamLightbox();
+
+      const teamLabel = '第' + escapeHtml(String(it.teamNo)) + '班　' + escapeHtml(it.teamName || '');
+      let contentHtml = '';
+      if (it.fileUrl){
+        contentHtml += '<img id="lightboxImg" src="' + it.fileUrl + '" alt="' + escapeHtml(it.fileName || '') + '">'
+          + '<button type="button" class="btn secondary edit-photo-btn" id="lightboxEditBtn">画像を編集（回転・トリミング）</button>';
+      }
+      if (it.textContent){
+        contentHtml += '<div class="post-text lightbox-text">' + escapeHtml(it.textContent).replace(/\\n/g,'<br>') + '</div>';
+      }
+      if (it.slideViewUrl){
+        const linkLabel = it.slideFileName ? 'ファイルを開く（' + escapeHtml(it.slideFileName) + '）' : 'リンクを開く';
+        contentHtml += '<p><a href="' + it.slideViewUrl + '" target="_blank">' + linkLabel + '</a></p>';
+      }
+      if (it.comment){
+        contentHtml += '<div class="comment">💬 ' + escapeHtml(it.comment).replace(/\\n/g,'<br>') + '</div>';
+      }
+      if (!contentHtml){
+        contentHtml = '<p class="empty">表示できる提出内容がありません。</p>';
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'teamLightboxOverlay';
+      overlay.className = 'lightbox-overlay';
+      overlay.innerHTML = '<div class="lightbox-box">'
+        + '<div class="lightbox-head"><strong>' + teamLabel + '</strong>'
+        + '<button type="button" class="lightbox-close" id="lightboxCloseBtn">✕ 閉じる</button></div>'
+        + '<div class="lightbox-body">' + contentHtml + '</div></div>';
+      document.body.appendChild(overlay);
+
+      document.getElementById('lightboxCloseBtn').addEventListener('click', closeTeamLightbox);
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) closeTeamLightbox(); });
+
+      const editBtn = document.getElementById('lightboxEditBtn');
+      if (editBtn){
+        editBtn.addEventListener('click', function(){
+          openImageEditor({
+            assignmentId: CURRENT_ASSIGNMENT_ID,
+            teamNo: it.teamNo,
+            onSaved: function(newFileUrl){
+              it.fileUrl = newFileUrl;
+              const img = document.getElementById('lightboxImg');
+              if (img) img.src = cacheBust(newFileUrl);
+              document.querySelectorAll('.pcard[data-team-no="' + String(it.teamNo).replace(/"/g,'') + '"] img').forEach(function(boardImg){
+                boardImg.src = cacheBust(newFileUrl);
+              });
+            }
+          });
+        });
+      }
+    }
+
+    document.getElementById('presentResult').addEventListener('click', function(e){
+      if (e.target.closest('a') || e.target.closest('button')) return;
+      const card = e.target.closest('.pcard');
+      if (!card) return;
+      const teamNo = card.getAttribute('data-team-no');
+      if (teamNo) openTeamLightbox(teamNo);
+    });
   `;
 
   const extraCss = `
@@ -1762,12 +2023,20 @@ async function openPresentationMenuTab(){
     .board{column-count:3;column-gap:18px;}
     @media (max-width:1100px){.board{column-count:2;}}
     @media (max-width:700px){.board{column-count:1;}}
-    .pcard{break-inside:avoid;background:#fffdf6;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,0.12);border-top:6px solid #f4c542;}
+    .pcard{break-inside:avoid;background:#fffdf6;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,0.12);border-top:6px solid #f4c542;cursor:pointer;transition:box-shadow 0.15s,transform 0.15s;}
+    .pcard:hover{box-shadow:0 4px 16px rgba(0,0,0,0.22);transform:translateY(-2px);}
     .pteam{font-weight:700;font-size:15px;margin-bottom:10px;color:#3a4a63;}
     .pcard img{max-width:100%;border-radius:6px;display:block;margin-bottom:8px;}
     .comment{background:#fff6d8;border-radius:6px;padding:8px 10px;font-size:13px;color:#5a4a20;}
     .post-text{font-size:15px;line-height:1.7;}
     .empty{color:#888;text-align:center;margin-top:40px;font-size:15px;}
+    .lightbox-overlay{position:fixed;inset:0;z-index:2500;background:rgba(20,24,32,0.78);display:flex;align-items:center;justify-content:center;padding:24px;cursor:default;}
+    .lightbox-box{background:#fffdf6;border-radius:14px;padding:22px;max-width:min(1000px,94vw);max-height:92vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,0.35);cursor:default;}
+    .lightbox-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;font-size:18px;color:#3a4a63;}
+    .lightbox-close{background:#eef1f5;color:#1f2430;border:1px solid #dde1e6;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;}
+    .lightbox-close:hover{background:#dfe4ea;}
+    .lightbox-body img{display:block;max-width:100%;max-height:70vh;margin:0 auto 10px;border-radius:8px;}
+    .lightbox-text{font-size:19px;line-height:1.8;padding:6px 2px;}
   `;
 
   writeTabDoc(win, '提示モード', bodyHtml, extraCss, extraScript);
@@ -1823,6 +2092,10 @@ async function openManageTab(){
           <label>パスワード（任意・空欄で自動生成）</label>
           <input type="text" id="newStudentPassword">
         </div>
+        <div>
+          <label>顔写真（任意）</label>
+          <input type="file" id="newStudentPhoto" accept="image/*">
+        </div>
       </div>
       <p class="muted">※学籍番号は「20CB001」のように、先頭に「k」をつけず、「cb」ではなく大文字の「CB」で入力してください。</p>
       <p class="muted">※氏名は名字と名前の間にスペースを入れてください（× 聞間理　○ 聞間　理）。</p>
@@ -1872,9 +2145,18 @@ async function openManageTab(){
     }
 
     // 写真は任意項目なので、登録されていない学生は「—」を表示する。
-    function memberPhotoCellHtml(m){
+    function memberPhotoImgHtml(m){
       if (!m.photoUrl) return '<span class="muted">—</span>';
-      return '<img src="' + escapeHtml(m.photoUrl) + '" alt="' + escapeHtml(m.name) + 'さんの顔写真" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:block;">';
+      return '<img src="' + escapeHtml(m.photoUrl) + '" alt="' + escapeHtml(m.name) + 'さんの顔写真" style="width:40px;height:40px;object-fit:cover;border-radius:4px;display:block;margin-bottom:4px;">';
+    }
+
+    // 写真は教員がいつでも登録・差し替えできるようにする（チーム新規登録時に未入力だった
+    // 場合や、写真を変更したい場合のため）。プレビュー用のサムネイルの下に、ファイル選択と
+    // 保存ボタンを並べる。
+    function memberPhotoCellHtml(m){
+      return '<div id="memberPhotoPreview-' + escapeHtml(m.studentId) + '">' + memberPhotoImgHtml(m) + '</div>'
+        + '<input type="file" class="memberPhotoInput" accept="image/*" style="max-width:130px;">'
+        + '<button class="btn small" data-action="save-photo" data-id="' + escapeHtml(m.studentId) + '" style="margin-top:4px;">写真を保存</button>';
     }
 
     function renderMembersTable(){
@@ -1928,12 +2210,19 @@ async function openManageTab(){
       if (!/^[0-9A-Za-z]+$/.test(studentId)){ setMsg('newStudentMsg', '学籍番号は半角英数字で入力してください（例：20CB001）。', 'error'); return; }
       if (!name){ setMsg('newStudentMsg', '氏名を入力してください。', 'error'); return; }
       if (!teamNo){ setMsg('newStudentMsg', '所属チームを選択してください（チームが1つもない場合は、先にチームを追加してください）。', 'error'); return; }
-      const res = await api('teacherCreateMember', { studentId: studentId, name: name, teamNo: teamNo, password: password });
+      const photoFile = document.getElementById('newStudentPhoto').files[0];
+      const payload = { studentId: studentId, name: name, teamNo: teamNo, password: password };
+      if (photoFile){
+        payload.photoBase64 = await fileToBase64(photoFile);
+        payload.photoFileName = photoFile.name;
+      }
+      const res = await api('teacherCreateMember', payload);
       if (!res.ok){ setMsg('newStudentMsg', res.error, 'error'); return; }
-      MEMBERS.push({ studentId: res.studentId, name: name, teamNo: teamNo });
+      MEMBERS.push({ studentId: res.studentId, name: name, teamNo: teamNo, photoUrl: res.photoUrl || '' });
       document.getElementById('newStudentId').value = '';
       document.getElementById('newStudentName').value = '';
       document.getElementById('newStudentPassword').value = '';
+      document.getElementById('newStudentPhoto').value = '';
       setMsg('newStudentMsg', '学籍番号 ' + res.studentId + ' を追加しました。パスワード：' + res.password + '（その場で学生に伝えてください。この画面を閉じると再表示できません）', 'success');
       renderMembersTable();
       renderTeamsTable(); // 新しいメンバーが代表者候補に加わるため、選択肢を更新する
@@ -1975,6 +2264,24 @@ async function openManageTab(){
     document.getElementById('membersBody').addEventListener('click', async function(e){
       const saveBtn = e.target.closest('button[data-action="save-member"]');
       const pwBtn = e.target.closest('button[data-action="reset-password"]');
+      const photoBtn = e.target.closest('button[data-action="save-photo"]');
+      if (photoBtn){
+        const studentId = photoBtn.getAttribute('data-id');
+        const tr = photoBtn.closest('tr');
+        const fileInput = tr.querySelector('.memberPhotoInput');
+        const msgId = 'memberMsg-' + studentId;
+        const file = fileInput.files[0];
+        if (!file){ setMsg(msgId, '写真ファイルを選択してください。', 'error'); return; }
+        const photoBase64 = await fileToBase64(file);
+        const res = await api('teacherUpdateMemberPhoto', { studentId: studentId, photoBase64: photoBase64, photoFileName: file.name });
+        if (!res.ok){ setMsg(msgId, res.error, 'error'); return; }
+        const m = MEMBERS.find(function(x){ return String(x.studentId) === String(studentId); });
+        if (m) m.photoUrl = res.photoUrl;
+        document.getElementById('memberPhotoPreview-' + studentId).innerHTML = memberPhotoImgHtml(m || { photoUrl: res.photoUrl, name: '' });
+        fileInput.value = '';
+        setMsg(msgId, '写真を保存しました。', 'success');
+        return;
+      }
       if (saveBtn){
         const studentId = saveBtn.getAttribute('data-id');
         const tr = saveBtn.closest('tr');
